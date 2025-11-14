@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
@@ -218,7 +217,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     console.log('AuthContext: signInWithProvider called with provider:', provider);
 
     try {
-      const redirectUrl = Linking.createURL('auth/callback');
+      const redirectUrl = 'wegood4u://auth/callback';
       console.log('OAuth redirectUrl:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
