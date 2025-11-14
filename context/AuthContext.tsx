@@ -219,12 +219,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
 
     try {
+      const redirectUrl = Platform.select({
+        web: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+        default: 'https://dimpgwotujtaacoajisn.supabase.co/auth/v1/callback',
+      });
+
+      console.log('OAuth redirectUrl:', redirectUrl);
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider,
         options: {
-          redirectTo: Platform.OS === 'web'
-            ? `${window.location.origin}/auth/callback`
-            : 'wegood4u://auth/callback',
+          redirectTo: redirectUrl,
           skipBrowserRedirect: Platform.OS !== 'web',
         },
       });
@@ -237,30 +242,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('OAuth sign in data:', data);
 
       if (Platform.OS !== 'web' && data.url) {
+        console.log('Opening WebBrowser with URL:', data.url);
+        
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
-          'wegood4u://auth/callback'
+          redirectUrl!,
         );
 
         console.log('WebBrowser result:', result);
 
         if (result.type === 'success' && result.url) {
-          const url = new URL(result.url);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
+          console.log('OAuth success, parsing URL:', result.url);
+          
+          const urlObj = new URL(result.url);
+          const fragment = urlObj.hash.substring(1);
+          const params = new URLSearchParams(fragment);
+          
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+
+          console.log('Extracted tokens - access:', !!accessToken, 'refresh:', !!refreshToken);
 
           if (accessToken && refreshToken) {
+            console.log('Setting session with tokens...');
             const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
 
-            if (sessionError) throw sessionError;
+            if (sessionError) {
+              console.error('Session set error:', sessionError);
+              throw sessionError;
+            }
 
             setSession(sessionData.session);
             setUser(sessionData.user ?? null);
             console.log('OAuth session set successfully');
+          } else {
+            console.error('No tokens found in callback URL');
+            throw new Error('Authentication failed: No tokens received');
           }
+        } else if (result.type === 'cancel') {
+          console.log('User cancelled OAuth flow');
+          throw new Error('Authentication cancelled');
+        } else {
+          console.log('OAuth flow failed:', result);
+          throw new Error('Authentication failed');
         }
       }
 
