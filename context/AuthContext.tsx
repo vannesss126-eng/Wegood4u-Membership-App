@@ -217,7 +217,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     console.log('AuthContext: signInWithProvider called with provider:', provider);
 
     try {
-      const redirectUrl = 'wegood4u://auth/callback';
+      const redirectUrl = 'https://wegood4u.com/auth/callback';
       console.log('OAuth redirectUrl:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({

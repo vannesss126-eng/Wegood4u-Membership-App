@@ -11,8 +11,20 @@ export default function AuthCallbackScreen() {
       try {
         console.log('AuthCallback: Received params:', params);
 
-        const accessToken = params.access_token as string;
-        const refreshToken = params.refresh_token as string;
+        let accessToken = params.access_token as string;
+        let refreshToken = params.refresh_token as string;
+
+        if (!accessToken || !refreshToken) {
+          console.log('AuthCallback: No tokens in params, checking for hash fragment');
+          
+          if (typeof window !== 'undefined') {
+            const hash = window.location.hash.substring(1);
+            const hashParams = new URLSearchParams(hash);
+            accessToken = hashParams.get('access_token') || '';
+            refreshToken = hashParams.get('refresh_token') || '';
+            console.log('AuthCallback: Extracted from hash - access:', !!accessToken, 'refresh:', !!refreshToken);
+          }
+        }
 
         if (accessToken && refreshToken) {
           console.log('AuthCallback: Setting session with tokens');
@@ -31,7 +43,7 @@ export default function AuthCallbackScreen() {
           console.log('AuthCallback: Session set successfully, redirecting to tabs');
           router.replace('/(tabs)');
         } else {
-          console.error('AuthCallback: No tokens found in params');
+          console.error('AuthCallback: No tokens found in params or hash');
           router.replace('/login');
         }
       } catch (error) {
