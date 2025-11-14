@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
@@ -217,21 +216,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signInWithProvider = async (provider: 'google' | 'facebook' | 'apple') => {
     console.log('AuthContext: signInWithProvider called with provider:', provider);
-    setIsLoading(true);
 
     try {
-      const redirectUrl = Platform.select({
-        web: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-        default: `${Linking.createURL('auth/callback')}`,
-      });
-
+      const redirectUrl = Linking.createURL('auth/callback');
       console.log('OAuth redirectUrl:', redirectUrl);
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: provider,
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: Platform.OS !== 'web',
+          skipBrowserRedirect: false,
         },
       });
 
@@ -240,14 +234,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw error;
       }
 
-      console.log('OAuth sign in data:', data);
+      console.log('OAuth sign in initiated, URL:', data.url);
 
-      if (Platform.OS !== 'web' && data.url) {
-        console.log('Opening WebBrowser with URL:', data.url);
-        
+      if (data.url) {
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
-          redirectUrl!,
+          redirectUrl,
         );
 
         console.log('WebBrowser result:', result);
@@ -266,7 +258,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
           if (accessToken && refreshToken) {
             console.log('Setting session with tokens...');
-            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            const { error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
@@ -276,8 +268,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               throw sessionError;
             }
 
-            setSession(sessionData.session);
-            setUser(sessionData.user ?? null);
             console.log('OAuth session set successfully');
           } else {
             console.error('No tokens found in callback URL');
@@ -295,8 +285,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error: any) {
       console.error('signInWithProvider error:', error);
       throw new Error(error.message || 'OAuth authentication failed');
-    } finally {
-      setIsLoading(false);
     }
   };
 
