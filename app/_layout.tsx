@@ -52,6 +52,15 @@ function DeepLinkHandler() {
             }
           }
         }
+        // Check if it's an OAuth callback
+        else if (parsedUrl.path === 'auth/callback') {
+          const { access_token, refresh_token } = parsedUrl.queryParams || {};
+          
+          if (access_token && refresh_token) {
+            console.log('OAuth callback deep link detected');
+            router.push(`/auth/callback?access_token=${access_token}&refresh_token=${refresh_token}`);
+          }
+        }
         // Add more path handlers here if needed (e.g., for other deep links)
       } catch (error) {
         console.error('Error handling deep link:', error);
@@ -114,6 +123,10 @@ export default function RootLayout() {
           />
           <Stack.Screen 
             name="confirm-email/index" 
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen 
+            name="auth/callback" 
             options={{ headerShown: false }}
           />
           <Stack.Screen 

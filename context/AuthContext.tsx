@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
@@ -221,7 +222,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const redirectUrl = Platform.select({
         web: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-        default: 'https://dimpgwotujtaacoajisn.supabase.co/auth/v1/callback',
+        default: `${Linking.createURL('auth/callback')}`,
       });
 
       console.log('OAuth redirectUrl:', redirectUrl);
