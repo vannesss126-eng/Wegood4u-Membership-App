@@ -53,12 +53,25 @@ function DeepLinkHandler() {
           }
         }
         // Check if it's an OAuth callback
-        else if (parsedUrl.path === 'auth/callback') {
-          const { access_token, refresh_token } = parsedUrl.queryParams || {};
+        else if (parsedUrl.path === 'auth/callback' || url.includes('auth/callback')) {
+          // Try to get tokens from query params first
+          let access_token = parsedUrl.queryParams?.access_token as string | undefined;
+          let refresh_token = parsedUrl.queryParams?.refresh_token as string | undefined;
+          
+          // If not in query params, check hash fragment (OAuth typically uses hash)
+          if ((!access_token || !refresh_token) && url.includes('#')) {
+            const hashIndex = url.indexOf('#');
+            const fragment = url.substring(hashIndex + 1);
+            const hashParams = new URLSearchParams(fragment);
+            access_token = hashParams.get('access_token') || undefined;
+            refresh_token = hashParams.get('refresh_token') || undefined;
+          }
           
           if (access_token && refresh_token) {
             console.log('OAuth callback deep link detected');
             router.push(`/auth/callback?access_token=${access_token}&refresh_token=${refresh_token}`);
+          } else {
+            console.warn('OAuth callback detected but no tokens found in URL');
           }
         }
         // Add more path handlers here if needed (e.g., for other deep links)

@@ -1,10 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '@/lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
-
-WebBrowser.maybeCompleteAuthSession();
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -213,80 +210,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const signInWithProvider = async (provider: 'google' | 'facebook' | 'apple') => {
-    console.log('AuthContext: signInWithProvider called with provider:', provider);
-
-    try {
-      const redirectUrl = 'https://wegood4u.com/auth/callback';
-      console.log('OAuth redirectUrl:', redirectUrl);
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: provider,
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
-        },
-      });
-
-      if (error) {
-        console.error('OAuth sign in error:', error);
-        throw error;
-      }
-
-      console.log('OAuth sign in initiated, URL:', data.url);
-
-      if (data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl,
-        );
-
-        console.log('WebBrowser result:', result);
-
-        if (result.type === 'success' && result.url) {
-          console.log('OAuth success, parsing URL:', result.url);
-          
-          const urlObj = new URL(result.url);
-          const fragment = urlObj.hash.substring(1);
-          const params = new URLSearchParams(fragment);
-          
-          const accessToken = params.get('access_token');
-          const refreshToken = params.get('refresh_token');
-
-          console.log('Extracted tokens - access:', !!accessToken, 'refresh:', !!refreshToken);
-
-          if (accessToken && refreshToken) {
-            console.log('Setting session with tokens...');
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-
-            if (sessionError) {
-              console.error('Session set error:', sessionError);
-              throw sessionError;
-            }
-
-            console.log('OAuth session set successfully');
-          } else {
-            console.error('No tokens found in callback URL');
-            throw new Error('Authentication failed: No tokens received');
-          }
-        } else if (result.type === 'cancel') {
-          console.log('User cancelled OAuth flow');
-          throw new Error('Authentication cancelled');
-        } else {
-          console.log('OAuth flow failed:', result);
-          throw new Error('Authentication failed');
-        }
-      }
-
-    } catch (error: any) {
-      console.error('signInWithProvider error:', error);
-      throw new Error(error.message || 'OAuth authentication failed');
-    }
-  };
-
   const value: AuthContextType = {
     user,
     session,
@@ -296,7 +219,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     signUp,
     signOut,
     forceClearAuth,
-    signInWithProvider,
   };
 
   console.log('AuthProvider render - isAuthenticated:', !!user && !!user.email_confirmed_at, 'isLoading:', isLoading);

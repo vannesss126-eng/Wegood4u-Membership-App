@@ -14,7 +14,6 @@ import {
 import { router } from 'expo-router';
 import { Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
-import SocialAuthButtons from '@/components/auth/SocialAuthButtons';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -159,20 +158,6 @@ export default function LoginScreen() {
               {submitting ? 'Logging in...' : 'Login'}
             </Text>
           </TouchableOpacity>
-{/*
-          //Debug info - remove this in production
-          <View style={styles.debugContainer}>
-            <Text style={styles.debugText}>
-              Debug: Submitting = {submitting.toString()}
-            </Text>
-            <Text style={styles.debugText}>
-              Email valid: {email.includes('@').toString()}
-            </Text>
-          </View>
-*/}
-          <Text style={styles.orText}>Or sign in with</Text>
-
-          <SocialAuthButtons />
 
           <TouchableOpacity style={styles.registerLink} onPress={goToRegister}>
             <Text style={styles.registerLinkText}>
@@ -321,12 +306,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontFamily: 'monospace',
-  },
-  orText: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#999',
-    marginBottom: 24,
   },
   registerLink: {
     alignItems: 'center',
