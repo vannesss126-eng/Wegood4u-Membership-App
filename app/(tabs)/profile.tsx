@@ -116,8 +116,8 @@ export default function ProfileScreen() {
     }
   };
 
-  const shareProfile = () => {
-    Alert.alert('Share Profile', 'Share your profile with friends!');
+  const handleInviteFriends = () => {
+    router.push('/invite-friends');
   };
 
 
@@ -159,7 +159,7 @@ export default function ProfileScreen() {
             <Menu size={24} color="#1e293b" />
           </TouchableOpacity>
           {/* Invitation Friend Button */}
-          <TouchableOpacity style={styles.shareButton} onPress={shareProfile}>
+          <TouchableOpacity style={styles.shareButton} onPress={handleInviteFriends}>
             <Share2 size={24} color="#1e293b" />
           </TouchableOpacity>
         </View>
