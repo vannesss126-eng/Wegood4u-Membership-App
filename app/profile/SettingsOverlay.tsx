@@ -139,12 +139,6 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
                   'Notifications',
                   handleNotifications
                 )}
-
-                {renderMenuItem(
-                  <UserPlus size={20} color="#64748B" />,
-                  'Invite Friends',
-                  handleInviteFriends
-                )}
               </View>
 
               {/* Security Section */}
