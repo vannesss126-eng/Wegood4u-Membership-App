@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight } from 'lucide-react-native';
+import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 
@@ -77,6 +77,11 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
     router.push('/profile/faq');
   };
 
+  const handleInviteFriends = () => {
+    onClose();
+    router.push('/invite-friends');
+  };
+
   const renderMenuItem = (
     icon: React.ReactNode,
     title: string,
@@ -133,6 +138,12 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
                   <Bell size={20} color="#64748B" />,
                   'Notifications',
                   handleNotifications
+                )}
+
+                {!isSubscriber && renderMenuItem(
+                  <UserPlus size={20} color="#64748B" />,
+                  'Invite Friends',
+                  handleInviteFriends
                 )}
               </View>
 
