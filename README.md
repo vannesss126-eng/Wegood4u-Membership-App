@@ -52,7 +52,7 @@ Visual Achievements: Each badge is represented by a unique image that will be di
 ## 4. Affiliate & Referral System
 This system is designed to drive user growth through member invitations.
 
-Becoming an Affiliate: A Member can request to become an affiliate. An Admin reviews this request, and upon approval, manually creates a unique invitation code (e.g., edbert1008) and promotes the user to the Affiliate Member role.
+Request Referral Code: A Member can request to have unique invitation code (e.g., WEGOOD123ABC) the code usually start with WEGOOD and there will 6 random characters that contain from a-z, A-Z, and 0-9.
 
 Two-Level Referral Tracking: The system tracks referrals two levels deep, allowing an Affiliate Member to view:
 
