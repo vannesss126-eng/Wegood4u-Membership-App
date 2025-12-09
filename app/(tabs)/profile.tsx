@@ -158,10 +158,12 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuButton} onPress={() => setShowSettingsOverlay(true)}>
             <Menu size={24} color="#1e293b" />
           </TouchableOpacity>
-          {/* Invitation Friend Button */}
-          <TouchableOpacity style={styles.shareButton} onPress={handleInviteFriends}>
-            <Share2 size={24} color="#1e293b" />
-          </TouchableOpacity>
+          {/* Invitation Friend Button (hidden for subscribers) */}
+          {userData.role !== 'subscriber' && (
+            <TouchableOpacity style={styles.shareButton} onPress={handleInviteFriends}>
+              <Share2 size={24} color="#1e293b" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Profile Section */}
