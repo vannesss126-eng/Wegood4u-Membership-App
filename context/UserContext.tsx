@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { Database } from '@/lib/supabase';
 import type { UserData, UserPreferenceData, UserContextType } from '@/types';
 import { useAuth } from './AuthContext';
+import { fetchInvitationCode, createInvitationCode } from '@/lib/referrals';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -67,6 +68,16 @@ export function UserProvider({ children }: UserProviderProps) {
         throw profileError;
       }
 
+      // Fetch invitation code
+      let invitationCodeRecord = null;
+      try {
+        invitationCodeRecord = await fetchInvitationCode(userId);
+      } catch (err: any) {
+        console.error('Error fetching invitation code:', err);
+        // Don't throw - just set to null if fetch fails
+        invitationCodeRecord = null;
+      }
+
       // Combine auth and profile data (without preferences)
       const combinedUserData: UserData = {
         // Auth data
@@ -82,6 +93,7 @@ export function UserProvider({ children }: UserProviderProps) {
         verificationCompleted: profile?.verification_completed || false,
         inviterId: profile?.inviter_id || null,
         affiliateRequestStatus: profile?.affiliate_request_status || null,
+        invitationCode: invitationCodeRecord?.code || null,
         dob: profile?.dob || null,
         gender: profile?.gender || null,
         createdAt: profile?.created_at || authUserData.created_at || null, // Added null fallback for safety
@@ -310,6 +322,33 @@ export function UserProvider({ children }: UserProviderProps) {
     }
   };
 
+  // Generate invitation code for the current user
+  const generateInvitationCodeForUser = async () => {
+    try {
+      if (!userData?.id) {
+        throw new Error('No user ID found');
+      }
+
+      console.log('Generating invitation code for user:', userData.id);
+      
+      // Create the invitation code
+      const invitationCodeRecord = await createInvitationCode(userData.id);
+      
+      // Update userData state with the new code
+      if (userData) {
+        setUserData({
+          ...userData,
+          invitationCode: invitationCodeRecord.code,
+        });
+      }
+
+      console.log('Invitation code generated:', invitationCodeRecord.code);
+    } catch (err: any) {
+      console.error('Error generating invitation code:', err);
+      throw new Error(err.message);
+    }
+  };
+
   // Set up real-time subscription for profile changes
   useEffect(() => {
     if (userData?.id) {
@@ -363,6 +402,7 @@ export function UserProvider({ children }: UserProviderProps) {
     updatePreferences,
     resendEmailConfirmation,
     updateProfile,
+    generateInvitationCodeForUser,
   };
 
   return (
