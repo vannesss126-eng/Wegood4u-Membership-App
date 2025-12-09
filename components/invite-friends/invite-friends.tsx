@@ -1,12 +1,44 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Share, Platform, Clipboard } from 'react-native';
-import { Copy, Share2 } from 'lucide-react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Share, Platform, Clipboard, ActivityIndicator } from 'react-native';
+import { Copy, Share2, Sparkles } from 'lucide-react-native';
+import { useUser } from '@/context/UserContext';
 
 export default function InviteFriends() {
-  const referralCode = 'WEGOOD8976DD';
-  const shareMessage = `Join Wegood4u using my code: ${referralCode}`;
+  const { userData, generateInvitationCodeForUser, isLoading } = useUser();
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const referralCode = userData?.invitationCode || '';
+  const PLAY_STORE_LINK = 'https://play.google.com/store/apps/details?id=com.saysheji.wegood4u';
+  const shareMessage = `Join Wegood4u using my code: ${referralCode}\n\nDownload the app: ${PLAY_STORE_LINK}`;
+  const hasInvitationCode = !!userData?.invitationCode;
+
+  const handleGenerateCode = async () => {
+    if (!userData?.id) {
+      Alert.alert('Error', 'Unable to generate code. Please try again later.');
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      await generateInvitationCodeForUser();
+      Alert.alert('Success!', 'Your invitation code has been generated successfully.');
+    } catch (error: any) {
+      console.error('Failed to generate invitation code:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to generate invitation code. Please try again later.'
+      );
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const copyToClipboard = async () => {
+    if (!referralCode) {
+      Alert.alert('Error', 'No referral code available');
+      return;
+    }
+
     try {
       if (Platform.OS === 'web') {
         await navigator.clipboard.writeText(referralCode);
@@ -21,6 +53,11 @@ export default function InviteFriends() {
   };
 
   const shareReferral = async () => {
+    if (!referralCode) {
+      Alert.alert('Error', 'No referral code available');
+      return;
+    }
+
     try {
       if (Platform.OS === 'web') {
         Alert.alert('Share', shareMessage);
@@ -35,34 +72,76 @@ export default function InviteFriends() {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <View style={styles.iconContainer}>
-          <Share2 size={48} color="#206E56" />
-        </View>
-
-        <Text style={styles.cardTitle}>Your Referral Code</Text>
-        <Text style={styles.cardDescription}>
-          Share your unique code with friends and earn rewards when they join!
-        </Text>
-
-        <View style={styles.codeContainer}>
-          <Text style={styles.code}>{referralCode}</Text>
-        </View>
-
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={styles.copyButton} onPress={copyToClipboard}>
-            <Copy size={20} color="white" />
-            <Text style={styles.copyButtonText}>Copy Code</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.shareButton} onPress={shareReferral}>
-            <Share2 size={20} color="#206E56" />
-            <Text style={styles.shareButtonText}>Share</Text>
-          </TouchableOpacity>
+  // Show loading state while user data is loading
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <ActivityIndicator size="large" color="#206E56" />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {hasInvitationCode ? (
+        // User has invitation code - show code display
+        <View style={styles.card}>
+          <View style={styles.iconContainer}>
+            <Share2 size={48} color="#206E56" />
+          </View>
+
+          <Text style={styles.cardTitle}>Your Referral Code</Text>
+          <Text style={styles.cardDescription}>
+            Share your unique code with friends and earn rewards when they join!
+          </Text>
+
+          <View style={styles.codeContainer}>
+            <Text style={styles.code}>{referralCode}</Text>
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.copyButton} onPress={copyToClipboard}>
+              <Copy size={20} color="white" />
+              <Text style={styles.copyButtonText}>Copy Code</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.shareButton} onPress={shareReferral}>
+              <Share2 size={20} color="#206E56" />
+              <Text style={styles.shareButtonText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        // User doesn't have invitation code - show generate code UI
+        <View style={styles.card}>
+          <View style={styles.iconContainer}>
+            <Sparkles size={48} color="#206E56" />
+          </View>
+
+          <Text style={styles.cardTitle}>Get Your Referral Code</Text>
+          <Text style={styles.cardDescription}>
+            Generate your unique invitation code to start inviting friends and earn rewards!
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.generateButton, isGenerating && styles.generateButtonDisabled]}
+            onPress={handleGenerateCode}
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.generateButtonText}>Generating...</Text>
+              </>
+            ) : (
+              <Text style={styles.generateButtonText}>Generate Code</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.infoCard}>
         <Text style={styles.infoTitle}>How it works</Text>
@@ -207,5 +286,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748b',
     flex: 1,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  generateButton: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#206E56',
+    paddingVertical: 16,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  generateButtonDisabled: {
+    opacity: 0.6,
+  },
+  generateButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
