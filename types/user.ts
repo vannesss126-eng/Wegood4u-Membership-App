@@ -14,6 +14,7 @@ export interface UserData {
   verificationCompleted: boolean;
   inviterId: string | null;
   affiliateRequestStatus: 'pending' | 'approved' | 'rejected' | null;
+  invitationCode: string | null;
   createdAt: string;
   updatedAt: string | null;
 }
@@ -39,6 +40,7 @@ export interface UserContextType {
   updatePreferences: (preferences: Partial<UserPreferenceData>) => Promise<void>;
   resendEmailConfirmation: () => Promise<void>;
   updateProfile: (updates: any) => Promise<any>;
+  generateInvitationCodeForUser: () => Promise<void>;
 }
 
 export interface UserStats {
