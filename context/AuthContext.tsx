@@ -88,19 +88,34 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // First, check if invitation code exists (if provided)
       let inviterId: string | undefined;
       if (invitationCode) {
-        console.log('Checking invitation code:', invitationCode);
-        const { data: inviteData, error: inviteError } = await supabase
+        // Trim whitespace from the invitation code
+        const trimmedCode = invitationCode.trim();
+        console.log('Checking invitation code (trimmed):', trimmedCode, 'Length:', trimmedCode.length);
+        
+        // Fetch all active invitation codes and do case-insensitive comparison in JavaScript
+        // This is more reliable than relying on database case-insensitive matching
+        const { data: allCodes, error: fetchError } = await supabase
           .from('invitation_codes')
-          .select('user_id')
-          .eq('code', invitationCode)
-          .eq('is_active', true)
-          .single();
+          .select('user_id, code')
+          .eq('is_active', true);
 
-        if (inviteError) {
-          console.error('Invalid invitation code:', inviteError);
+        if (fetchError) {
+          console.error('Error fetching invitation codes:', fetchError);
           throw new Error('Invalid invitation code');
         }
-        inviterId = inviteData.user_id;
+
+        // Find matching code (case-insensitive)
+        const matchedCode = allCodes?.find(
+          (codeRecord) => codeRecord.code.trim().toUpperCase() === trimmedCode.toUpperCase()
+        );
+
+        if (!matchedCode) {
+          console.error('Invitation code not found:', trimmedCode);
+          console.log('Available codes:', allCodes?.map(c => c.code));
+          throw new Error('Invalid invitation code');
+        }
+
+        inviterId = matchedCode.user_id;
         console.log('Valid invitation code, inviter ID:', inviterId);
       }
 
@@ -170,6 +185,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     
     try {
+      const {
+        data: { session: currentSession },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('signOut: Failed to fetch current session', sessionError);
+        throw sessionError;
+      }
+
+      if (!currentSession) {
+        console.warn('signOut: No active session found, clearing local auth state only');
+        setUser(null);
+        setSession(null);
+        console.log('signOut: Local auth state cleared');
+        return;
+      }
+
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('SignOut error:', error);
