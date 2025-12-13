@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus } from 'lucide-react-native';
+import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus, LayoutDashboard } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 
@@ -35,7 +35,15 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
           style: 'destructive', 
           onPress: async () => {
             onClose();
-            await signOut();
+            try {
+              await signOut();
+            } catch (error: any) {
+              console.error('Logout failed:', error);
+              Alert.alert(
+                'Logout Failed',
+                error?.message || 'Unable to log you out. Please try again.'
+              );
+            }
           }
         },
       ]
@@ -138,6 +146,12 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
                   <Bell size={20} color="#64748B" />,
                   'Notifications',
                   handleNotifications
+                )}
+
+                {!isSubscriber && renderMenuItem(
+                  <UserPlus size={20} color="#64748B" />,
+                  'Invite Friends',
+                  handleInviteFriends
                 )}
               </View>
 
