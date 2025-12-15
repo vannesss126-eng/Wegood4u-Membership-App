@@ -197,6 +197,21 @@ CREATE POLICY "Users can update own profile"
   TO authenticated
   USING (auth.uid() = id);
 
+-- Allow setting inviter_id during registration (anon and authenticated), limited to recent profiles
+-- USING checks existing row (inviter_id must be NULL), WITH CHECK validates new row (inviter_id must be NOT NULL)
+CREATE POLICY "Allow inviter_id update during registration"
+  ON public.profiles
+  FOR UPDATE
+  TO anon, authenticated
+  USING (
+    inviter_id IS NULL
+    AND created_at > now() - interval '5 minutes'
+  )
+  WITH CHECK (
+    inviter_id IS NOT NULL
+    AND created_at > now() - interval '5 minutes'
+  );
+
 CREATE POLICY "Admins can read all profiles"
   ON public.profiles
   FOR SELECT
@@ -417,10 +432,17 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Trigger for invitation code usage tracking
+-- Trigger for invitation code usage tracking (on INSERT)
 CREATE TRIGGER on_profile_inviter_set
   AFTER INSERT ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.increment_invitation_usage();
+
+-- Trigger for invitation code usage tracking (on UPDATE when inviter_id is set)
+CREATE TRIGGER on_profile_inviter_updated
+  AFTER UPDATE ON public.profiles
+  FOR EACH ROW
+  WHEN (OLD.inviter_id IS NULL AND NEW.inviter_id IS NOT NULL)
+  EXECUTE FUNCTION public.increment_invitation_usage();
 
 -- Trigger for automatic badge awarding
 CREATE TRIGGER on_submission_approved
