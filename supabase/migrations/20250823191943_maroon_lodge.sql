@@ -197,20 +197,20 @@ CREATE POLICY "Users can update own profile"
   TO authenticated
   USING (auth.uid() = id);
 
--- Allow setting inviter_id during registration (anon and authenticated), limited to recent profiles
--- USING checks existing row (inviter_id must be NULL), WITH CHECK validates new row (inviter_id must be NOT NULL)
-CREATE POLICY "Allow inviter_id update during registration"
+-- 1) Allow anon to create a profile row at signup
+CREATE POLICY "Anon can insert profile at signup"
+  ON public.profiles
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+
+-- 2) Allow anon to set inviter_id once at signup
+CREATE POLICY "Anon can set inviter_id at signup"
   ON public.profiles
   FOR UPDATE
-  TO anon, authenticated
-  USING (
-    inviter_id IS NULL
-    AND created_at > now() - interval '5 minutes'
-  )
-  WITH CHECK (
-    inviter_id IS NOT NULL
-    AND created_at > now() - interval '5 minutes'
-  );
+  TO anon
+  USING (inviter_id IS NULL)
+  WITH CHECK (inviter_id IS NOT NULL);
 
 CREATE POLICY "Admins can read all profiles"
   ON public.profiles
