@@ -90,33 +90,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (invitationCode) {
         // Trim whitespace from the invitation code
         const trimmedCode = invitationCode.trim();
-        console.log('Checking invitation code (trimmed):', trimmedCode, 'Length:', trimmedCode.length);
         
-        // Fetch all active invitation codes and do case-insensitive comparison in JavaScript
-        // This is more reliable than relying on database case-insensitive matching
-        const { data: allCodes, error: fetchError } = await supabase
+        // Direct database query using index for fast, case-sensitive lookup
+        const { data: inviteData, error: inviteError } = await supabase
           .from('invitation_codes')
-          .select('user_id, code')
-          .eq('is_active', true);
+          .select('user_id')
+          .eq('code', trimmedCode)  // Exact case-sensitive match, uses index
+          .eq('is_active', true)
+          .maybeSingle();
 
-        if (fetchError) {
-          console.error('Error fetching invitation codes:', fetchError);
+        if (inviteError) {
+          console.error('Error validating invitation code:', inviteError);
           throw new Error('Invalid invitation code');
         }
 
-        // Find matching code (case-insensitive)
-        const matchedCode = allCodes?.find(
-          (codeRecord) => codeRecord.code.trim().toUpperCase() === trimmedCode.toUpperCase()
-        );
-
-        if (!matchedCode) {
-          console.error('Invitation code not found:', trimmedCode);
-          console.log('Available codes:', allCodes?.map(c => c.code));
+        if (!inviteData) {
           throw new Error('Invalid invitation code');
         }
 
-        inviterId = matchedCode.user_id;
-        console.log('Valid invitation code, inviter ID:', inviterId);
+        inviterId = inviteData.user_id;
       }
 
       console.log('Creating user account...');
@@ -156,18 +148,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Wait a moment for the trigger to create the profile
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        console.log('Updating profile with inviter ID...');
-        const { error: updateError } = await supabase
+        console.log('Updating profile with inviter ID:', inviterId, 'for user:', data.user.id);
+        const { data: updatedData, error: updateError } = await supabase
           .from('profiles')
           .update({ inviter_id: inviterId })
-          .eq('id', data.user.id);
+          .eq('id', data.user.id)
+          .select()
+          .single();
 
         if (updateError) {
-          console.log('Error setting inviter:', updateError);
-          // Don't throw error here - profile was created successfully
-        } else {
-          console.log('Inviter ID set successfully');
+          console.error('Error setting inviter:', updateError);
+          console.error('Error details:', JSON.stringify(updateError, null, 2));
+          throw new Error(`Failed to set inviter: ${updateError.message}`);
         }
+
+        if (!updatedData) {
+          console.error('Update returned no data - RLS policy may have blocked the update');
+          throw new Error('Failed to set inviter_id: Update was blocked or returned no data');
+        }
+
+        if (updatedData.inviter_id !== inviterId) {
+          console.error('Update verification failed. Expected:', inviterId, 'Got:', updatedData.inviter_id);
+          throw new Error('Failed to verify inviter_id was set correctly');
+        }
+
+        console.log('Inviter ID set successfully. Verified:', updatedData.inviter_id);
       }
 
     } catch (error: any) {
