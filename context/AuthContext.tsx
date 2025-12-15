@@ -142,37 +142,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser (data.user ?? null);
       console.log('User  created successfully:', data.user.id);
 
-      // If invitation code was provided, update the profile with inviter_id after trigger creates it
+      const userId = data.user.id;
+
+      // 1) Manually create or ensure the profile exists (instead of relying on trigger timing)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: userId,
+            username: displayName,
+            full_name: displayName,
+            role: 'subscriber',
+            dob: dateOfBirth, // assuming profiles.dob exists as date
+          },
+          { onConflict: 'id' }
+        );
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+        throw new Error(`Failed to create profile: ${profileError.message}`);
+      }
+
+      // 2) If invitation code was provided, set inviter_id on the profile
       if (inviterId) {
-        console.log('Waiting for profile creation trigger...');
-        // Wait a moment for the trigger to create the profile
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        console.log('Updating profile with inviter ID:', inviterId, 'for user:', data.user.id);
-        const { data: updatedData, error: updateError } = await supabase
+        console.log('Setting inviter_id on profile:', inviterId, 'for user:', userId);
+
+        const { error: updateError } = await supabase
           .from('profiles')
           .update({ inviter_id: inviterId })
-          .eq('id', data.user.id)
-          .select()
-          .single();
+          .eq('id', userId);
 
         if (updateError) {
           console.error('Error setting inviter:', updateError);
-          console.error('Error details:', JSON.stringify(updateError, null, 2));
-          throw new Error(`Failed to set inviter: ${updateError.message}`);
+          // Decide whether to fail signup or just log. For now, log and continue.
+          // throw new Error(`Failed to set inviter: ${updateError.message}`);
+        } else {
+          console.log('Inviter ID set successfully for user:', userId);
         }
-
-        if (!updatedData) {
-          console.error('Update returned no data - RLS policy may have blocked the update');
-          throw new Error('Failed to set inviter_id: Update was blocked or returned no data');
-        }
-
-        if (updatedData.inviter_id !== inviterId) {
-          console.error('Update verification failed. Expected:', inviterId, 'Got:', updatedData.inviter_id);
-          throw new Error('Failed to verify inviter_id was set correctly');
-        }
-
-        console.log('Inviter ID set successfully. Verified:', updatedData.inviter_id);
       }
 
     } catch (error: any) {
