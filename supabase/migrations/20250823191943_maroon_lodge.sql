@@ -511,6 +511,7 @@ WITH RECURSIVE referral_levels AS (
     p1.id as user_id,
     p1.username,
     p1.full_name,
+    p1.inviter_id as inviter_id,
     1 as level,
     p1.created_at
   FROM public.profiles p1
@@ -524,6 +525,7 @@ WITH RECURSIVE referral_levels AS (
     p2.id as user_id,
     p2.username,
     p2.full_name,
+    rl.user_id as inviter_id,
     2 as level,
     p2.created_at
   FROM referral_levels rl

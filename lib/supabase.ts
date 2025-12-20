@@ -356,6 +356,7 @@ export type Database = {
           full_name: string | null;
           level: number;
           created_at: string;
+          inviter_id: string | null;
         };
       };
     };
