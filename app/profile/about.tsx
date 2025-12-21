@@ -12,6 +12,7 @@ import { ArrowLeft, Info, Target } from 'lucide-react-native';
 import { router } from 'expo-router';
 
 export default function AboutScreen() {
+  const year = new Date().getFullYear();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -57,7 +58,7 @@ export default function AboutScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            © 2024 Wegood4u. All rights reserved.
+            © {year} Wegood4u. All rights reserved.
           </Text>
           <Text style={styles.footerSubtext}>
             Made with ❤️ for content creators and local businesses
