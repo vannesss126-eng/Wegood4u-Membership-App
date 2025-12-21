@@ -262,7 +262,7 @@ export default function MapScreen() {
                   const dialerUrl = `tel:${phone}`;
                   try {
                     await Linking.openURL(dialerUrl);
-                  } catch (dialerError) {
+                  } catch {
                     // If that fails, show instructions
                     Alert.alert(
                       'Call Instructions',
