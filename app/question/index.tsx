@@ -165,11 +165,13 @@ export default function QuestionnairePage() {
   };
 
   const validateForm = (): boolean => {
+    // Validate full name
     if (!formData.fullName.trim()) {
       Alert.alert('Validation Error', 'Please enter your full name');
       return false;
     }
 
+    // Validate communication channel specific fields
     if (formData.communicationChannel === 'WhatsApp' && !formData.whatsappNumber.trim()) {
       Alert.alert('Validation Error', 'Please enter your WhatsApp number');
       return false;
@@ -190,6 +192,40 @@ export default function QuestionnairePage() {
       return false;
     }
 
+    // Validate travel destination detail (required when a destination category is selected)
+    if (formData.travelDestination === 'Beach Destinations' && !formData.specificBeachDestination.trim()) {
+      Alert.alert('Validation Error', 'Please specify your beach destination');
+      return false;
+    }
+
+    if (formData.travelDestination === 'Cultural Destinations' && !formData.specificCulturalDestination.trim()) {
+      Alert.alert('Validation Error', 'Please specify your cultural destination');
+      return false;
+    }
+
+    if (formData.travelDestination === 'Adventure Destinations' && !formData.specificAdventureDestination.trim()) {
+      Alert.alert('Validation Error', 'Please specify your adventure destination');
+      return false;
+    }
+
+    if (formData.travelDestination === 'Urban Destinations' && !formData.specificUrbanDestination.trim()) {
+      Alert.alert('Validation Error', 'Please specify your urban destination');
+      return false;
+    }
+
+    // Validate travel preference (when "Others" is selected)
+    if (formData.travelPreferences === 'Others' && !formData.otherTravelPreference.trim()) {
+      Alert.alert('Validation Error', 'Please specify your travel preference');
+      return false;
+    }
+
+    // Validate accommodation preference (when "Alternative Accommodations" is selected)
+    if (formData.accommodationType === 'Alternative Accommodations' && !formData.alternativeAccommodation.trim()) {
+      Alert.alert('Validation Error', 'Please specify your alternative accommodation');
+      return false;
+    }
+
+    // Validate travel budget (when "Other (please specify)" is selected)
     if (formData.travelBudget === 'Other (please specify)' && !formData.customBudget.trim()) {
       Alert.alert('Validation Error', 'Please specify your custom budget');
       return false;
@@ -279,6 +315,14 @@ export default function QuestionnairePage() {
           console.error('Supabase error:', error);
           Alert.alert('Error', 'Failed to submit questionnaire. Please try again.');
         } else {
+          // Refresh auth session first to get latest email confirmation status
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('Refreshed session after questionnaire submission:', session?.user?.email_confirmed_at ? 'confirmed' : 'not confirmed');
+          } catch (sessionError) {
+            console.error('Error refreshing session:', sessionError);
+          }
+          
           // Refresh user data to get the latest verification status
           await refreshUserData();
           
