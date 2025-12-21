@@ -8,8 +8,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const supabaseUrl = Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+// Debug logging (only in development)
+if (__DEV__) {
+  console.log('Supabase Config Check:');
+  console.log('- supabaseUrl from Constants:', !!Constants.expoConfig?.extra?.supabaseUrl);
+  console.log('- supabaseUrl from process.env:', !!process.env.EXPO_PUBLIC_SUPABASE_URL);
+  console.log('- supabaseAnonKey from Constants:', !!Constants.expoConfig?.extra?.supabaseAnonKey);
+  console.log('- supabaseAnonKey from process.env:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY);
+  console.log('- Final supabaseUrl:', supabaseUrl ? 'SET' : 'MISSING');
+  console.log('- Final supabaseAnonKey:', supabaseAnonKey ? 'SET' : 'MISSING');
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to your .env file');
+  const errorMsg = `Missing Supabase environment variables. 
+    supabaseUrl: ${supabaseUrl ? 'SET' : 'MISSING'}
+    supabaseAnonKey: ${supabaseAnonKey ? 'SET' : 'MISSING'}
+    Constants.expoConfig?.extra: ${JSON.stringify(Constants.expoConfig?.extra || {})}
+    Please ensure EAS secrets are configured for EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY`;
+  console.error(errorMsg);
+  throw new Error(errorMsg);
 }
 
 // Constants for storage management
