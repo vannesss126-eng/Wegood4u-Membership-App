@@ -106,10 +106,10 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <UserProvider>
-        <DeepLinkHandler />
-        <Stack 
+        <AuthProvider>
+          <UserProvider>
+          <DeepLinkHandler />
+          <Stack 
           screenOptions={{ 
             headerShown: false,
             headerBackVisible: false,
