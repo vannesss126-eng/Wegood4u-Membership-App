@@ -17,7 +17,6 @@ import MapView, { Marker, Callout } from 'react-native-maps';
 import { MapPin, Star, Phone, Clock, Navigation, ChevronDown } from 'lucide-react-native';
 import { fetchPartnerStores, groupStoresByCity } from '@/data/partnerStore';
 import type { PartnerStore } from '@/types';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { FallbackMap } from '@/components/FallbackMap';
 
 export default function MapScreen() {
@@ -312,35 +311,30 @@ export default function MapScreen() {
   // Show loading state
   if (loading) {
     return (
-      <ErrorBoundary>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading partner stores...</Text>
-          </View>
-        </SafeAreaView>
-      </ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading partner stores...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Show error state
   if (error) {
     return (
-      <ErrorBoundary>
-        <SafeAreaView style={styles.container}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadPartnerStores}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadPartnerStores}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <ErrorBoundary>
-      <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Partner Stores</Text>
           <Text style={styles.subtitle}>{getSubtitleText()}</Text>
@@ -570,7 +564,6 @@ export default function MapScreen() {
         </TouchableOpacity>
       </Modal>
       </SafeAreaView>
-    </ErrorBoundary>
   );
 }
 
