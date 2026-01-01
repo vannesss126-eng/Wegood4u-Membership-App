@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { CircleEllipsis as Home, MapPin, Store, SquareCheck as CheckSquare, User } from 'lucide-react-native';
+import { CircleEllipsis as Home, MapPin, SquareCheck as CheckSquare, User } from 'lucide-react-native';
 import { AuthGuard } from '@/components/AuthGuard';
 
 export default function TabLayout() {
@@ -51,15 +51,6 @@ export default function TabLayout() {
             title: 'Map',
             tabBarIcon: ({ size, color }) => (
               <MapPin size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="store"
-          options={{
-            title: 'Store',
-            tabBarIcon: ({ size, color }) => (
-              <Store size={size} color={color} />
             ),
           }}
         />
