@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Upload, Gift } from 'lucide-react-native';
+import { Upload, Award, Ticket } from 'lucide-react-native';
 import Submission from './submission';
 import Badges from './badges';
+import Rewards from './rewards';
 import { useUserSubmissions } from '@/hooks/useSubmissions';
 import type { PartnerStore } from '@/types';
 
@@ -22,7 +23,7 @@ export default function VerifiedMember({
   setShowStoreDropdown,
   partnerStores
 }: VerifiedMemberProps) {
-  const [activeTab, setActiveTab] = useState<'submit' | 'rewards'>('submit');
+  const [activeTab, setActiveTab] = useState<'submit' | 'badges' | 'rewards'>('submit');
   // Removed insets usage
 
   // Use the custom hook for fetching user submissions
@@ -55,9 +56,19 @@ export default function VerifiedMember({
           style={[styles.tab, activeTab === 'submit' && styles.activeTab]}
           onPress={() => setActiveTab('submit')}
         >
-          <Upload size={20} color={activeTab === 'submit' ? '#206E56' : '#64748B'} />
+          <Upload size={18} color={activeTab === 'submit' ? '#206E56' : '#64748B'} />
           <Text style={[styles.tabText, activeTab === 'submit' && styles.activeTabText]}>
-            Submit Proof
+            Submit
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'badges' && styles.activeTab]}
+          onPress={() => setActiveTab('badges')}
+        >
+          <Award size={18} color={activeTab === 'badges' ? '#206E56' : '#64748B'} />
+          <Text style={[styles.tabText, activeTab === 'badges' && styles.activeTabText]}>
+            Badges
           </Text>
         </TouchableOpacity>
 
@@ -65,9 +76,9 @@ export default function VerifiedMember({
           style={[styles.tab, activeTab === 'rewards' && styles.activeTab]}
           onPress={() => setActiveTab('rewards')}
         >
-          <Gift size={20} color={activeTab === 'rewards' ? '#206E56' : '#64748B'} />
+          <Ticket size={18} color={activeTab === 'rewards' ? '#206E56' : '#64748B'} />
           <Text style={[styles.tabText, activeTab === 'rewards' && styles.activeTabText]}>
-            View Rewards
+            Rewards
           </Text>
         </TouchableOpacity>
       </View>
@@ -77,7 +88,7 @@ export default function VerifiedMember({
         contentContainerStyle={{ paddingBottom: 90 }}
         showsVerticalScrollIndicator={false}
       >
-        {activeTab === 'submit' ? (
+        {activeTab === 'submit' && (
           <Submission
             userData={userData}
             selectedStore={selectedStore}
@@ -88,7 +99,8 @@ export default function VerifiedMember({
             isLoadingSubmissions={isLoadingSubmissions}
             fetchSubmissions={fetchSubmissions}
           />
-        ) : (
+        )}
+        {activeTab === 'badges' && (
           <Badges
             userData={userData}
             submissions={submissions}
@@ -96,6 +108,9 @@ export default function VerifiedMember({
             isLoadingSubmissions={isLoadingSubmissions}
             fetchSubmissions={fetchSubmissions}
           />
+        )}
+        {activeTab === 'rewards' && (
+          <Rewards />
         )}
       </ScrollView>
     </SafeAreaView>
