@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Dimensions,
+  FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,16 +24,89 @@ import { fetchPartnerStores } from '@/data/partnerStore';
 import { router } from 'expo-router';
 import type { PartnerStore } from '@/types';
 
+// Banner images
+const BANNER_IMAGES = [
+  require('@/assets/images/fnb-banner.png'),
+  require('@/assets/images/hotel-banner.png'),
+];
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const BANNER_WIDTH = SCREEN_WIDTH - 40; // Account for padding
+const AUTO_SCROLL_INTERVAL = 4000; // 4 seconds
+
 export default function HomeScreen() {
   const { userData } = useUser();
   const [recommendedRestaurants, setRecommendedRestaurants] = useState<PartnerStore[]>([]);
   const [recommendedCafes, setRecommendedCafes] = useState<PartnerStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Banner slider state
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const bannerFlatListRef = useRef<FlatList>(null);
+  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load partner stores and filter recommendations
   useEffect(() => {
     loadPartnerStores();
   }, []);
+
+  // Auto-scroll banner effect
+  useEffect(() => {
+    const startAutoScroll = () => {
+      autoScrollTimerRef.current = setInterval(() => {
+        setCurrentBannerIndex((prevIndex) => {
+          const nextIndex = (prevIndex + 1) % BANNER_IMAGES.length;
+          bannerFlatListRef.current?.scrollToIndex({
+            index: nextIndex,
+            animated: true,
+          });
+          return nextIndex;
+        });
+      }, AUTO_SCROLL_INTERVAL);
+    };
+
+    startAutoScroll();
+
+    return () => {
+      if (autoScrollTimerRef.current) {
+        clearInterval(autoScrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Handle manual scroll
+  const handleBannerScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / BANNER_WIDTH);
+    if (index !== currentBannerIndex && index >= 0 && index < BANNER_IMAGES.length) {
+      setCurrentBannerIndex(index);
+      // Reset auto-scroll timer when user manually scrolls
+      if (autoScrollTimerRef.current) {
+        clearInterval(autoScrollTimerRef.current);
+        autoScrollTimerRef.current = setInterval(() => {
+          setCurrentBannerIndex((prevIndex) => {
+            const nextIndex = (prevIndex + 1) % BANNER_IMAGES.length;
+            bannerFlatListRef.current?.scrollToIndex({
+              index: nextIndex,
+              animated: true,
+            });
+            return nextIndex;
+          });
+        }, AUTO_SCROLL_INTERVAL);
+      }
+    }
+  }, [currentBannerIndex]);
+
+  // Render banner item
+  const renderBannerItem = useCallback(({ item, index }: { item: any; index: number }) => (
+    <View style={styles.bannerImageContainer}>
+      <Image
+        source={item}
+        style={styles.bannerImage}
+        resizeMode="cover"
+      />
+    </View>
+  ), []);
 
   const loadPartnerStores = async () => {
     try {
@@ -135,10 +212,39 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
 
-        {/* Advertisement Banner */}
+        {/* Promotional Banner Slider */}
         <View style={styles.section}>
-          <View style={styles.advertisementBanner}>
-            <Text style={styles.advertisementText}>Advertisement</Text>
+          <View style={styles.bannerContainer}>
+            <FlatList
+              ref={bannerFlatListRef}
+              data={BANNER_IMAGES}
+              renderItem={renderBannerItem}
+              keyExtractor={(_, index) => `banner-${index}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={handleBannerScroll}
+              getItemLayout={(_, index) => ({
+                length: BANNER_WIDTH,
+                offset: BANNER_WIDTH * index,
+                index,
+              })}
+              snapToInterval={BANNER_WIDTH}
+              decelerationRate="fast"
+              bounces={false}
+            />
+            {/* Pagination Dots */}
+            <View style={styles.paginationContainer}>
+              {BANNER_IMAGES.map((_, index) => (
+                <View
+                  key={`dot-${index}`}
+                  style={[
+                    styles.paginationDot,
+                    currentBannerIndex === index && styles.paginationDotActive,
+                  ]}
+                />
+              ))}
+            </View>
           </View>
         </View>
 
@@ -220,23 +326,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#206E56',
   },
-  advertisementBanner: {
-    backgroundColor: '#dce0e7ff',
+  bannerContainer: {
     borderRadius: 16,
-    paddingVertical: 60,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
   },
-  advertisementText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#374151',
+  bannerImageContainer: {
+    width: BANNER_WIDTH,
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  paginationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
+    gap: 8,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  paginationDotActive: {
+    backgroundColor: '#FFFFFF',
+    width: 24,
   },
   quickActions: {
     flexDirection: 'row',
