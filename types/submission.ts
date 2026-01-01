@@ -36,6 +36,7 @@ export interface ApprovedCounts {
   total: number;
   restaurant: number;
   cafe: number;
+  bar: number;
   others: number;
 }
 

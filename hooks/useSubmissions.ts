@@ -101,7 +101,9 @@ export function useUserSubmissions(userId: string) {
     total: approvedSubmissions.length,
     restaurant: approvedSubmissions.filter(s => s.category === 'restaurant').length,
     cafe: approvedSubmissions.filter(s => s.category === 'cafe').length,
-    others: approvedSubmissions.filter(s => !['restaurant', 'cafe'].includes(s.category)).length,
+    // Map 'others' category to 'bar' for badge tracking
+    bar: approvedSubmissions.filter(s => s.category === 'others').length,
+    others: approvedSubmissions.filter(s => !['restaurant', 'cafe', 'others'].includes(s.category)).length,
   };
 
   // Statistics for UI
