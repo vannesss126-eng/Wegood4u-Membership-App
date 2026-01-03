@@ -14,7 +14,7 @@ export const BADGE_RANKS = [1, 2, 3] as const;
 export type BadgeRank = typeof BADGE_RANKS[number];
 
 // Badge categories
-export const BADGE_CATEGORIES = ['Bar', 'Cafe', 'Restaurant'] as const;
+export const BADGE_CATEGORIES = ['Bar', 'Cafe', 'Restaurant', 'Hotel'] as const;
 export type BadgeCategoryType = typeof BADGE_CATEGORIES[number];
 
 // Badge requirement thresholds
@@ -49,6 +49,7 @@ export const BADGE_CATEGORY_INFO: Record<BadgeCategoryType, { displayName: strin
   Bar: { displayName: 'Bar Explorer', color: '#8B5CF6', bgColor: '#F3E8FF' },
   Cafe: { displayName: 'Coffee Lover', color: '#F59E0B', bgColor: '#FEF3C7' },
   Restaurant: { displayName: 'Foodie', color: '#EF4444', bgColor: '#FEE2E2' },
+  Hotel: { displayName: 'Hotel Explorer', color: '#3B82F6', bgColor: '#EFF6FF' },
 };
 
 /**
@@ -59,7 +60,7 @@ export const BADGE_CATEGORY_INFO: Record<BadgeCategoryType, { displayName: strin
  * @returns The full URL to the badge image
  */
 export function getBadgeImageUrl(category: BadgeCategoryType, tier: BadgeTier, rank: BadgeRank): string {
-  const filename = `${category}_${tier}_${rank}-min.png`;
+  const filename = `${category}_${tier}_${rank}-min.webp`;
   return `${BADGES_BUCKET_URL}/${filename}`;
 }
 
