@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
-import { RefreshCw, Lock, Wine, Coffee, UtensilsCrossed } from 'lucide-react-native';
+import { RefreshCw, Lock, Wine, Coffee, UtensilsCrossed, Hotel } from 'lucide-react-native';
 
 import {
   BADGE_CATEGORIES,
   BADGE_CATEGORY_INFO,
   BADGE_TIER_COLORS,
+  BADGE_TIERS,
   getAllBadgesForCategory,
   getCurrentBadge,
   MAX_BADGE_REQUIREMENT,
@@ -32,6 +33,8 @@ const getCategoryCount = (category: BadgeCategoryType, approvedCounts: ApprovedC
       return approvedCounts.cafe;
     case 'Restaurant':
       return approvedCounts.restaurant;
+    case 'Hotel':
+      return approvedCounts.hotel;
     default:
       return 0;
   }
@@ -48,6 +51,8 @@ const getCategoryIcon = (category: BadgeCategoryType, isActive: boolean) => {
       return <Coffee size={size} color={color} />;
     case 'Restaurant':
       return <UtensilsCrossed size={size} color={color} />;
+    case 'Hotel':
+      return <Hotel size={size} color={color} />;
   }
 };
 
@@ -61,7 +66,6 @@ export default function Badges({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
   const [activeCategory, setActiveCategory] = useState<BadgeCategoryType>('Bar');
-  const [activeTier, setActiveTier] = useState<BadgeTier>('Bronze');
 
   // Handle refresh button press
   const handleRefresh = async () => {
@@ -84,6 +88,12 @@ export default function Badges({
   const handleImageLoadEnd = (key: string) => {
     setLoadingImages(prev => ({ ...prev, [key]: false }));
   };
+
+  // Clear image loading state when switching categories
+  const handleCategoryChange = useCallback((category: BadgeCategoryType) => {
+    setLoadingImages({}); // Reset loading states
+    setActiveCategory(category);
+  }, []);
 
   const renderBadgeImage = (
     imageUrl: string, 
@@ -120,12 +130,12 @@ export default function Badges({
         />
         {!unlocked && (
           <View style={styles.lockOverlay}>
-            <Lock size={20} color="#64748B" />
+            <Lock size={16} color="#94A3B8" />
           </View>
         )}
         {current && (
           <View style={[styles.currentIndicator, { backgroundColor: tierColor.primary }]}>
-            <Text style={styles.currentIndicatorText}>Current</Text>
+            <Text style={styles.currentIndicatorText}>✓</Text>
           </View>
         )}
       </View>
@@ -138,20 +148,16 @@ export default function Badges({
     const allBadges = getAllBadgesForCategory(category, count);
     const currentBadgeInfo = getCurrentBadge(count);
     
-    // Get only the active tier's badges - KEY OPTIMIZATION!
-    const activeTierBadges = allBadges.filter(b => b.tier === activeTier);
-    const earnedInTier = activeTierBadges.filter(b => b.unlocked).length;
-    
+    // Group badges by tier
+    const badgesByTier: Record<BadgeTier, typeof allBadges> = {
+      Bronze: allBadges.filter(b => b.tier === 'Bronze'),
+      Silver: allBadges.filter(b => b.tier === 'Silver'),
+      Gold: allBadges.filter(b => b.tier === 'Gold'),
+      Platinum: allBadges.filter(b => b.tier === 'Platinum'),
+    };
+
     const earnedCount = allBadges.filter(b => b.unlocked).length;
     const progressPercentage = Math.min((count / MAX_BADGE_REQUIREMENT) * 100, 100);
-
-    // Get tier requirements range for display
-    const tierRequirements: Record<BadgeTier, string> = {
-      Bronze: '5 - 20',
-      Silver: '30 - 50',
-      Gold: '60 - 80',
-      Platinum: '90 - 120',
-    };
 
     return (
       <View key={category} style={styles.categorySection}>
@@ -183,123 +189,78 @@ export default function Badges({
           </View>
         </View>
 
-        {/* Tier Slider/Tabs */}
-        <View style={styles.tierSliderContainer}>
-          {(['Bronze', 'Silver', 'Gold', 'Platinum'] as BadgeTier[]).map((tier) => {
-            const isActive = activeTier === tier;
-            const tierColor = BADGE_TIER_COLORS[tier];
-            const tierBadges = allBadges.filter(b => b.tier === tier);
-            const earnedInThisTier = tierBadges.filter(b => b.unlocked).length;
-            
-            return (
-              <TouchableOpacity
-                key={tier}
-                style={[
-                  styles.tierSliderTab,
-                  isActive && styles.tierSliderTabActive,
-                  isActive && { backgroundColor: tierColor.bg, borderColor: tierColor.primary }
-                ]}
-                onPress={() => handleTierChange(tier)}
-              >
-                <View style={[styles.tierSliderDot, { backgroundColor: tierColor.primary }]} />
-                <Text style={[
-                  styles.tierSliderText,
-                  isActive && { color: tierColor.text, fontWeight: 'bold' }
-                ]}>
-                  {tier}
-                </Text>
-                <Text style={[
-                  styles.tierSliderCount,
-                  isActive && { color: tierColor.primary }
-                ]}>
-                  {earnedInThisTier}/3
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Active Tier Info */}
-        <View style={styles.tierInfoSection}>
-          <Text style={styles.tierInfoText}>
-            {activeTier} tier requires {tierRequirements[activeTier]} visits
-          </Text>
-        </View>
-
-        {/* Only render the active tier's badges - 3 images only! */}
-        <View style={styles.badgesSection}>
-          <View style={styles.badgesRow}>
-            {activeTierBadges.map((badge) => (
-              <TouchableOpacity
-                key={`${badge.tier}_${badge.rank}`}
-                style={styles.badgeItem}
-                onPress={() => {
-                  if (badge.unlocked) {
-                    Alert.alert(
-                      `${badge.tier} Badge ${badge.rank}`,
-                      `Congratulations! You earned this badge at ${badge.requirement} visits.`
-                    );
-                  } else {
-                    Alert.alert(
-                      `${badge.tier} Badge ${badge.rank}`,
-                      `Reach ${badge.requirement} approved visits to unlock this badge.`
-                    );
-                  }
-                }}
-              >
-                {renderBadgeImage(
-                  badge.imageUrl,
-                  badge.unlocked,
-                  badge.current,
-                  badge.tier,
-                  badge.rank,
-                  category
-                )}
-                <Text style={[
-                  styles.badgeRequirement,
-                  badge.unlocked && styles.badgeRequirementUnlocked
-                ]}>
-                  {badge.requirement} visits
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Current Badge Display */}
-        {currentBadgeInfo && count >= 5 && (
-          <View style={styles.currentBadgeSection}>
-            <Text style={styles.currentBadgeLabel}>🏆 Your Current Badge</Text>
-            <View style={styles.currentBadgeDisplay}>
-              <View style={styles.currentBadgeInfo}>
-                <Text style={styles.currentBadgeTier}>
-                  {currentBadgeInfo.tier} {currentBadgeInfo.rank}
-                </Text>
-                {currentBadgeInfo.nextRequirement && (
-                  <Text style={styles.nextBadgeText}>
-                    Next: {currentBadgeInfo.nextTier} {currentBadgeInfo.nextRank} ({currentBadgeInfo.nextRequirement} visits)
-                  </Text>
-                )}
+        {/* All Badges organized by Tier */}
+        {BADGE_TIERS.map((tier) => {
+          const tierBadges = badgesByTier[tier];
+          const tierColor = BADGE_TIER_COLORS[tier];
+          const earnedInTier = tierBadges.filter(b => b.unlocked).length;
+          
+          return (
+            <View key={tier} style={styles.tierSection}>
+              {/* Tier Header */}
+              <View style={styles.tierHeader}>
+                <View style={[styles.tierDot, { backgroundColor: tierColor.primary }]} />
+                <Text style={[styles.tierTitle, { color: tierColor.text }]}>{tier}</Text>
+                <Text style={styles.tierProgress}>{earnedInTier}/3</Text>
+              </View>
+              
+              {/* Badges Row */}
+              <View style={styles.badgesRow}>
+                {tierBadges.map((badge) => (
+                  <TouchableOpacity
+                    key={`${badge.tier}_${badge.rank}`}
+                    style={styles.badgeItem}
+                    onPress={() => {
+                      if (badge.unlocked) {
+                        Alert.alert(
+                          `${badge.tier} Badge ${badge.rank} 🎉`,
+                          `Congratulations! You earned this badge at ${badge.requirement} visits.`
+                        );
+                      } else {
+                        Alert.alert(
+                          `${badge.tier} Badge ${badge.rank} 🔒`,
+                          `Reach ${badge.requirement} approved visits to unlock this badge.`
+                        );
+                      }
+                    }}
+                  >
+                    {renderBadgeImage(
+                      badge.imageUrl,
+                      badge.unlocked,
+                      badge.current,
+                      badge.tier,
+                      badge.rank,
+                      category
+                    )}
+                    <Text style={[
+                      styles.badgeRequirement,
+                      badge.unlocked && styles.badgeRequirementUnlocked
+                    ]}>
+                      {badge.requirement}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
+          );
+        })}
+
+        {/* Current Badge Info */}
+        {currentBadgeInfo && count >= 5 && (
+          <View style={styles.currentBadgeInfo}>
+            <Text style={styles.currentBadgeText}>
+              🏆 Current: {currentBadgeInfo.tier} {currentBadgeInfo.rank}
+              {currentBadgeInfo.nextRequirement && (
+                <Text style={styles.nextBadgeText}>
+                  {' '}• Next: {currentBadgeInfo.nextTier} {currentBadgeInfo.nextRank} at {currentBadgeInfo.nextRequirement} visits
+                </Text>
+              )}
+            </Text>
           </View>
         )}
       </View>
     );
   };
-
-  // Clear image loading state when switching categories
-  const handleCategoryChange = useCallback((category: BadgeCategoryType) => {
-    setLoadingImages({}); // Reset loading states
-    setActiveCategory(category);
-    setActiveTier('Bronze'); // Reset to Bronze when switching category
-  }, []);
-
-  // Handle tier change
-  const handleTierChange = useCallback((tier: BadgeTier) => {
-    setLoadingImages({}); // Reset loading states
-    setActiveTier(tier);
-  }, []);
 
   if (isLoadingSubmissions && approvedCounts.total === 0) {
     return (
@@ -356,7 +317,7 @@ export default function Badges({
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Only render the active category - This is the key optimization! */}
+        {/* Render the active category with ALL badges */}
         {renderCategorySection(activeCategory)}
 
         {/* Empty State */}
@@ -395,7 +356,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
-    paddingTop: 10,
+    paddingVertical: 10,
     paddingHorizontal: 20,
   },
   headerTitle: {
@@ -428,11 +389,12 @@ const styles = StyleSheet.create({
   },
   categoryTabsContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginHorizontal: 20,
     marginBottom: 16,
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 4,
+    padding: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -440,14 +402,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   categoryTab: {
-    flex: 1,
+    width: '50%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
     borderRadius: 8,
-    gap: 4,
+    gap: 6,
   },
   categoryTabActive: {
     backgroundColor: '#CBEED2',
@@ -494,7 +456,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
-  // Note: summaryCard styles removed - replaced with category tabs for better performance
   categorySection: {
     backgroundColor: 'white',
     borderRadius: 16,
@@ -554,88 +515,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
-    width: 60,
+    width: 50,
     textAlign: 'right',
   },
-  tierSliderContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
+  tierSection: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
-  tierSliderTab: {
-    flex: 1,
-    flexDirection: 'column',
+  tierHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: '#F8FAFC',
-    gap: 4,
+    marginBottom: 12,
+    gap: 8,
   },
-  tierSliderTabActive: {
-    borderWidth: 2,
-  },
-  tierSliderDot: {
+  tierDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
   },
-  tierSliderText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  tierSliderCount: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  tierInfoSection: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
-  },
-  tierInfoText: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  badgesSection: {
-    padding: 16,
-  },
-  currentBadgeSection: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  currentBadgeLabel: {
-    fontSize: 14,
+  tierTitle: {
+    fontSize: 16,
     fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  currentBadgeDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  currentBadgeInfo: {
     flex: 1,
   },
-  currentBadgeTier: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  nextBadgeText: {
-    fontSize: 14,
-    color: '#64748B',
-    marginTop: 4,
+  tierProgress: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
   badgesRow: {
     flexDirection: 'row',
@@ -663,7 +571,7 @@ const styles = StyleSheet.create({
     height: 70,
   },
   lockedBadgeImage: {
-    opacity: 0.3,
+    opacity: 0.4,
   },
   imageLoader: {
     position: 'absolute',
@@ -671,7 +579,7 @@ const styles = StyleSheet.create({
   },
   lockOverlay: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
     width: '100%',
     height: '100%',
     justifyContent: 'center',
@@ -679,25 +587,43 @@ const styles = StyleSheet.create({
   },
   currentIndicator: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingVertical: 2,
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   currentIndicatorText: {
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
-    textAlign: 'center',
   },
   badgeRequirement: {
     fontSize: 12,
     color: '#94A3B8',
-    marginTop: 4,
+    marginTop: 6,
     fontWeight: '600',
   },
   badgeRequirementUnlocked: {
     color: '#22C55E',
+  },
+  currentBadgeInfo: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F0FDF4',
+    borderTopWidth: 1,
+    borderTopColor: '#BBF7D0',
+  },
+  currentBadgeText: {
+    fontSize: 14,
+    color: '#166534',
+    fontWeight: '600',
+  },
+  nextBadgeText: {
+    fontWeight: '400',
+    color: '#15803D',
   },
   emptyState: {
     backgroundColor: 'white',
