@@ -38,7 +38,7 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `wegood4u://reset-password?type=recovery`,
+        redirectTo: 'https://wegood4u-web.web.app/reset-password',
       });
 
       if (error) {
