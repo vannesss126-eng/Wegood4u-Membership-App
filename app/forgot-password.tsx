@@ -133,7 +133,7 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Check Your Email</Text>
               <Text style={styles.description}>
-                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password. If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.
+                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password. <br /> <br /> <b>If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.</b>
               </Text>
 
               <View style={styles.successActions}>
