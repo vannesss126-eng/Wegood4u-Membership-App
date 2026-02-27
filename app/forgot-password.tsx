@@ -133,7 +133,10 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Check Your Email</Text>
               <Text style={styles.description}>
-                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password. <br /> <br /> <b>If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.</b>
+                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password.
+              </Text>
+              <Text style={[styles.description, styles.descriptionSpam]}>
+                If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.
               </Text>
 
               <View style={styles.successActions}>
@@ -220,9 +223,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748B',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 16,
     lineHeight: 24,
     paddingHorizontal: 20,
+  },
+  descriptionSpam: {
+    marginBottom: 32,
+    fontWeight: '600',
   },
   form: {
     backgroundColor: 'white',
