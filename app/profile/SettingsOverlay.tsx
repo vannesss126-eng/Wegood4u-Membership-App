@@ -9,9 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus } from 'lucide-react-native';
+import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 interface SettingsOverlayProps {
   visible: boolean;
@@ -45,6 +46,51 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
               );
             }
           }
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you absolutely sure? This action cannot be undone and all your travel proofs, badges, and rewards will be permanently lost.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data, error } = await supabase.functions.invoke('delete-account', {
+                method: 'POST',
+              });
+
+              if (error || (data as any)?.error) {
+                throw error || new Error((data as any)?.error);
+              }
+
+              try {
+                await signOut();
+              } catch {
+                await supabase.auth.signOut();
+              }
+
+              onClose();
+              router.replace('/(tabs)');
+
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been permanently removed.'
+              );
+            } catch (err: any) {
+              console.error('Failed to delete account:', err);
+              Alert.alert(
+                'Error',
+                'We encountered an issue deleting your account. Please try again or contact support.'
+              );
+            }
+          },
         },
       ]
     );
@@ -197,6 +243,16 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
                     <Text style={styles.logoutText}>Logout</Text>
                   </View>
                 </TouchableOpacity>
+
+                {/* Delete Account */}
+                <TouchableOpacity style={styles.deleteItem} onPress={handleDeleteAccount}>
+                  <View style={styles.menuItemLeft}>
+                    <View style={styles.deleteIcon}>
+                      <Trash2 size={20} color="#EF4444" />
+                    </View>
+                    <Text style={styles.deleteText}>Delete Account</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </SafeAreaView>
@@ -322,6 +378,29 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  deleteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#fee2e2',
+  },
+  deleteIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  deleteText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#EF4444',
