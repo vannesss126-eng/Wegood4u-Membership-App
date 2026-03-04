@@ -20,6 +20,7 @@ import {
   ChevronRight as ChevronRightIcon,
 } from 'lucide-react-native';
 import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { fetchPartnerStores } from '@/data/partnerStore';
 import { router } from 'expo-router';
 import type { PartnerStore } from '@/types';
@@ -36,6 +37,7 @@ const AUTO_SCROLL_INTERVAL = 4000; // 4 seconds
 
 export default function HomeScreen() {
   const { userData } = useUser();
+  const { isAuthenticated } = useAuth();
   const [recommendedRestaurants, setRecommendedRestaurants] = useState<PartnerStore[]>([]);
   const [recommendedCafes, setRecommendedCafes] = useState<PartnerStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,6 +198,8 @@ export default function HomeScreen() {
     </View>
   );
 
+  const isGuest = !isAuthenticated;
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -206,9 +210,25 @@ export default function HomeScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.header}
         >
-          <View style={styles.headerContent}>
-            <Text style={styles.greeting}>Welcome back!</Text>
-            <Text style={styles.username}>{userData?.fullName || userData?.username || 'User'}</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.headerContent}>
+              <Text style={styles.greeting}>
+                {isGuest ? 'Welcome to Wegood4u!' : 'Welcome back!'}
+              </Text>
+              <Text style={styles.username}>
+                {isGuest
+                  ? 'Start Exploring!'
+                  : (userData?.fullName || userData?.username || 'User')}
+              </Text>
+            </View>
+            {!isAuthenticated && (
+              <TouchableOpacity
+                style={styles.signInButton}
+                onPress={() => router.push('/login')}
+              >
+                <Text style={styles.signInButtonText}>Sign In</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </LinearGradient>
 
@@ -276,8 +296,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
-  headerContent: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerContent: {
+    alignItems: 'flex-start',
   },
   greeting: {
     fontSize: 16,
@@ -290,6 +315,19 @@ const styles = StyleSheet.create({
     color: 'white',
     marginBottom: 12,
     textTransform: 'capitalize',
+  },
+  signInButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  signInButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   section: {
     marginBottom: 24,
