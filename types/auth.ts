@@ -8,8 +8,8 @@ export interface RegisterData {
   password: string;
   confirmPassword: string;
   displayName: string;
-  dateOfBirth: Date;
-  gender: string;
+  dateOfBirth?: Date | null;
+  gender?: string | null;
   invitationCode?: string;
 }
 
@@ -19,7 +19,14 @@ export interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName: string, dateOfBirth: string, gender: string, invitationCode?: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+    dateOfBirth?: string | null,
+    gender?: string | null,
+    invitationCode?: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   forceClearAuth: () => Promise<void>;
 }
