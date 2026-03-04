@@ -21,7 +21,7 @@ interface FormData {
   password: string;
   confirmPassword: string;
   displayName: string;
-  dateOfBirth: Date;
+  dateOfBirth: Date | null;
   gender: string;
   invitationCode: string;
 }
@@ -32,7 +32,7 @@ export default function RegisterScreen() {
     password: '',
     confirmPassword: '',
     displayName: '',
-    dateOfBirth: new Date(),
+    dateOfBirth: null,
     gender: '',
     invitationCode: '',
   });
@@ -73,16 +73,19 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    if (!formData.email || !formData.password || !formData.displayName || !formData.dateOfBirth || !formData.gender) {
+    // Only require core fields
+    if (!formData.email || !formData.password || !formData.displayName) {
       Alert.alert('Error', 'Please fill in all required fields');
       return;
     }
 
-    // Validate date is not in the future
-    const today = new Date();
-    if (formData.dateOfBirth > today) {
-      Alert.alert('Error', 'Date of birth cannot be in the future');
-      return;
+    // Validate date is not in the future (if provided)
+    if (formData.dateOfBirth) {
+      const today = new Date();
+      if (formData.dateOfBirth > today) {
+        Alert.alert('Error', 'Date of birth cannot be in the future');
+        return;
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -106,14 +109,16 @@ export default function RegisterScreen() {
 
     try {
       setSubmitting(true);
-      // Format date as YYYY-MM-DD for database
-      const formattedDate = formData.dateOfBirth.toISOString().split('T')[0];
+      // Format date as YYYY-MM-DD for database if provided
+      const formattedDate = formData.dateOfBirth
+        ? formData.dateOfBirth.toISOString().split('T')[0]
+        : null;
       await signUp(
         formData.email, 
         formData.password, 
         formData.displayName, 
         formattedDate, 
-        formData.gender, 
+        formData.gender || null, 
         formData.invitationCode || undefined
       );
       
@@ -174,7 +179,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Date of Birth</Text>
+            <Text style={styles.inputLabel}>Date of Birth (Optional)</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setShowDatePicker(true)}
@@ -189,7 +194,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Gender</Text>
+            <Text style={styles.inputLabel}>Gender (Optional)</Text>
             <TouchableOpacity
               style={styles.input}
               onPress={() => setShowGenderDropdown(true)}
@@ -301,7 +306,7 @@ export default function RegisterScreen() {
       {/* Date Picker Modal */}
       {showDatePicker && (
         <DateTimePicker
-          value={formData.dateOfBirth}
+          value={formData.dateOfBirth || new Date()}
           mode="date"
           display="default"
           maximumDate={new Date()}
