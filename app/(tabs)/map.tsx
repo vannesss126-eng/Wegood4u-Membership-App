@@ -5,9 +5,12 @@ import {
   StyleSheet,
   ScrollView,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapPin, Star, Phone, Clock } from 'lucide-react-native';
+import { useAuth } from '@/context/AuthContext';
+import { router } from 'expo-router';
 
 interface PartnerStore {
   id: number;
@@ -21,6 +24,7 @@ interface PartnerStore {
 }
 
 export default function MapScreen() {
+  const { isAuthenticated } = useAuth();
   const partnerStores: PartnerStore[] = [
     {
       id: 1,
@@ -77,8 +81,18 @@ export default function MapScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Partner Stores</Text>
-        <Text style={styles.subtitle}>{partnerStores.length} locations nearby</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.title}>Partner Stores</Text>
+          <Text style={styles.subtitle}>{partnerStores.length} locations nearby</Text>
+        </View>
+        {!isAuthenticated && (
+          <TouchableOpacity
+            style={styles.signInButton}
+            onPress={() => router.push('/login')}
+          >
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.mapContainer}>
@@ -134,6 +148,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flexShrink: 1,
   },
   title: {
     fontSize: 24,
@@ -144,6 +164,18 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#64748b',
+  },
+  signInButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#206E56',
+  },
+  signInButtonText: {
+    color: '#206E56',
+    fontSize: 14,
+    fontWeight: '600',
   },
   mapContainer: {
     height: 200,

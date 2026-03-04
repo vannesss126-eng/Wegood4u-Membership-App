@@ -12,14 +12,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Menu, Share2, Camera, SquareCheckBig, Trophy, SquareLibrary, Clock, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
 import { useUserSubmissions , usePendingSubmissions } from '@/hooks/useSubmissions';
 
 import { uploadProfileImage, updateUserAvatar } from '@/services/imageUpload'
 import { router } from 'expo-router';
 import SettingsOverlay from '@/app/profile/SettingsOverlay';
+import LoginRequiredScreen from '@/components/LoginRequiredScreen';
 
 export default function ProfileScreen() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { userData, isLoading: userLoading, refreshUserData } = useUser();
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
@@ -37,8 +40,8 @@ export default function ProfileScreen() {
     isLoading: isLoadingPending
   } = usePendingSubmissions();
 
-  // Show loading state
-  if (userLoading) {
+  // Show loading state while auth or user data is still resolving
+  if (authLoading || userLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -49,7 +52,12 @@ export default function ProfileScreen() {
     );
   }
 
-  // Show error state if no user data
+  // For guests, show a friendly login-required screen instead of an error
+  if (!isAuthenticated) {
+    return <LoginRequiredScreen featureName="Profile" />;
+  }
+
+  // If authenticated but user data failed to load, keep the existing error state
   if (!userData) {
     return (
       <SafeAreaView style={styles.container}>

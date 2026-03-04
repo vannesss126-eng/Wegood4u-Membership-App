@@ -9,14 +9,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, ChevronRight, X, RefreshCw, Activity as ActivityIndicator } from 'lucide-react-native';
+import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
 import { fetchPartnerStores, groupStoresByCity } from '@/data/partnerStore';
 import type { PartnerStore } from '@/types';
 import UnverifiedMember from '@/components/unverified-member/UnverifiedMember';
 import VerifiedMember from '@/components/verified-member/VerifiedMember';
-import AdminTaskScreen from '@/components/admin-member/AdminTaskScreen'
+import AdminTaskScreen from '@/components/admin-member/AdminTaskScreen';
+import LoginRequiredScreen from '@/components/LoginRequiredScreen';
 
 export default function TasksScreen() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { userData, isLoading: userLoading, refreshUserData, resendEmailConfirmation } = useUser();
   const [partnerStores, setPartnerStores] = useState<PartnerStore[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
@@ -84,8 +87,8 @@ export default function TasksScreen() {
     }
   };
 
-  // Show loading state
-  if (userLoading) {
+  // If auth state is still loading, show a simple loading state
+  if (authLoading || userLoading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]}>
         <View style={styles.loadingContainer}>
@@ -96,7 +99,12 @@ export default function TasksScreen() {
     );
   }
 
-  // Show error state if no user data
+  // For guests, show a friendly login-required screen instead of an error
+  if (!isAuthenticated) {
+    return <LoginRequiredScreen featureName="Tasks" />;
+  }
+
+  // If authenticated but user data failed to load, keep the existing error state
   if (!userData) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: '#FFFFFF' }]}>
