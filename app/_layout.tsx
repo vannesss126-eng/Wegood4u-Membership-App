@@ -110,6 +110,7 @@ export default function RootLayout() {
           <UserProvider>
           <DeepLinkHandler />
           <Stack 
+          initialRouteName="(tabs)"
           screenOptions={{ 
             headerShown: false,
             headerBackVisible: false,

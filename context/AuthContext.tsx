@@ -80,7 +80,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const signUp = async (email: string, password: string, displayName: string, dateOfBirth: string, gender: string, invitationCode?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName: string,
+    dateOfBirth?: string | null,
+    gender?: string | null,
+    invitationCode?: string
+  ) => {
     console.log('AuthContext: signUp called');
     setIsLoading(true);
     
@@ -120,8 +127,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           data: {
             username: displayName,
             full_name: displayName,
-            dob: dateOfBirth,
-            gender: gender,
+            dob: dateOfBirth ?? null,
+            gender: gender ?? null,
           },
           emailRedirectTo: 'https://wegood4u.com/email-confirmed',
         },
@@ -153,7 +160,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             username: displayName,
             full_name: displayName,
             role: 'subscriber',
-            dob: dateOfBirth, // assuming profiles.dob exists as date
+            dob: dateOfBirth ?? null, // assuming profiles.dob exists as date
           },
           { onConflict: 'id' }
         );
