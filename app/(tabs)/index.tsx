@@ -144,7 +144,7 @@ export default function HomeScreen() {
   };
 
   const renderStoreCard = (store: PartnerStore, index: number) => (
-    <TouchableOpacity key={store.id} style={styles.storeCard}>
+    <View key={store.id} style={styles.storeCard}>
       <Image source={{ uri: store.image }} style={styles.storeImage} />
       <View style={styles.storeInfo}>
         <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
@@ -158,7 +158,7 @@ export default function HomeScreen() {
           <Text style={styles.locationText} numberOfLines={1}>{store.city}</Text>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderRecommendationSection = (title: string, stores: PartnerStore[]) => (
