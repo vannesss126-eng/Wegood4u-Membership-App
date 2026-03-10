@@ -340,17 +340,13 @@ export default function SubmissionComponent({
       <View style={styles.tableSection}>
         <View style={styles.tableTitleContainer}>
           <Text style={styles.tableTitle}>Your Submissions</Text>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={() => fetchSubmissions(true)}
-            disabled={isLoadingSubmissions}
-          >
+          <View style={styles.refreshButton}>
             <Upload 
               size={18} 
               color="#64748B" 
               style={[isLoadingSubmissions && { opacity: 0.5 }]}
             />
-          </TouchableOpacity>
+          </View>
         </View>
         
         {submissions.length === 0 ? (
