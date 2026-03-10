@@ -43,40 +43,11 @@ export default function Rewards() {
     },
   ]);
 
-  const handleClaimVoucher = (voucherId: string) => {
-    const voucher = vouchers.find(v => v.id === voucherId);
-    if (!voucher) return;
-
-    if (voucher.claimed) {
-      Alert.alert(
-        'Already Claimed',
-        'You have already claimed this voucher. Check your email for the voucher code.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
+  const handleClaimVoucher = () => {
     Alert.alert(
-      'Claim Voucher',
-      `Are you sure you want to claim "${voucher.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Claim',
-          onPress: () => {
-            setVouchers(prev =>
-              prev.map(v =>
-                v.id === voucherId ? { ...v, claimed: true } : v
-              )
-            );
-            Alert.alert(
-              'Voucher Claimed! 🎉',
-              `Your "${voucher.title}" voucher has been claimed successfully! Check your email for the voucher code.`,
-              [{ text: 'Great!' }]
-            );
-          },
-        },
-      ]
+      'Coming Soon',
+      'Rewards claiming will be available in a future update.',
+      [{ text: 'OK' }],
     );
   };
 
@@ -108,18 +79,17 @@ export default function Rewards() {
         <TouchableOpacity
           style={[
             styles.claimButton,
-            voucher.claimed && styles.claimedButton,
             { borderColor: voucher.color }
           ]}
-          onPress={() => handleClaimVoucher(voucher.id)}
+          onPress={handleClaimVoucher}
         >
           <Text
             style={[
               styles.claimButtonText,
-              { color: voucher.claimed ? '#94A3B8' : voucher.color }
+              { color: voucher.color }
             ]}
           >
-            {voucher.claimed ? 'View Code' : 'Claim Now'}
+            Coming Soon
           </Text>
         </TouchableOpacity>
       </View>
