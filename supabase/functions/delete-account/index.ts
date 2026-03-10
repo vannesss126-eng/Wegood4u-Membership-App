@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
     const userId = userData.user.id;
 
     // 1) Call DB RPC to delete user data (transactional server-side operation)
-    const { error: rpcError } = await supabaseAdmin.rpc("app.delete_user_data", { p_user_id: userId });
+    const { error: rpcError } = await supabaseAdmin.rpc("delete_user_data", { p_user_id: userId });
     if (rpcError) {
       console.error("RPC app.delete_user_data error:", rpcError);
       // Return 500 since DB cleanup failed
