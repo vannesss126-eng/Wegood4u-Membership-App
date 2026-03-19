@@ -175,6 +175,216 @@ export function usePendingSubmissions() {
   };
 }
 
+// Hook specifically for admin pending submissions pagination
+// Uses Supabase `range()` to avoid loading the entire pending list at once.
+export function usePendingSubmissionsPaginated(pageSize: number = 5) {
+  const [pendingSubmissions, setPendingSubmissions] = useState<Submission[]>([]);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalPendingCount, setTotalPendingCount] = useState<number | null>(null);
+
+  const PENDING_SELECT = `*, profiles:user_id (username, full_name)`;
+
+  const fetchTotalPendingCount = useCallback(async () => {
+    const { count, error: countError } = await supabase
+      .from('submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    if (countError) {
+      throw new Error(countError.message || 'Failed to fetch pending submissions count');
+    }
+
+    setTotalPendingCount(count ?? 0);
+  }, []);
+
+  const loadPage = useCallback(
+    async (pageIndex: number, mode: 'initial' | 'refresh' | 'more') => {
+      const from = pageIndex * pageSize;
+      const to = from + pageSize - 1;
+
+      const query = supabase
+        .from('submissions')
+        .select(PENDING_SELECT)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      const { data, error: fetchError } = await query;
+      if (fetchError) {
+        throw new Error(fetchError.message || 'Failed to fetch pending submissions');
+      }
+
+      const page = data || [];
+
+      if (mode === 'more') {
+        setPendingSubmissions((prev) => [...prev, ...page]);
+      } else {
+        setPendingSubmissions(page);
+      }
+
+      setHasMore(page.length === pageSize);
+      setError(null);
+    },
+    [pageSize]
+  );
+
+  const refresh = useCallback(async () => {
+    try {
+      setIsRefreshing(true);
+      setHasMore(true);
+      await Promise.all([fetchTotalPendingCount(), loadPage(0, 'refresh')]);
+    } catch (err: any) {
+      console.error('Error refreshing pending submissions:', err);
+      setError(err?.message || 'Failed to refresh pending submissions');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchTotalPendingCount, loadPage]);
+
+  useEffect(() => {
+    let mounted = true;
+    const bootstrap = async () => {
+      try {
+        setIsLoadingInitial(true);
+        setError(null);
+        setHasMore(true);
+
+        await Promise.all([fetchTotalPendingCount(), loadPage(0, 'initial')]);
+      } catch (err: any) {
+        console.error('Error loading pending submissions:', err);
+        if (!mounted) return;
+        setError(err?.message || 'Failed to load pending submissions');
+      } finally {
+        if (!mounted) return;
+        setIsLoadingInitial(false);
+      }
+    };
+
+    bootstrap();
+    return () => {
+      mounted = false;
+    };
+  }, [fetchTotalPendingCount, loadPage]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoadingMore) return;
+    try {
+      setIsLoadingMore(true);
+      const nextPageIndex = Math.floor(pendingSubmissions.length / pageSize);
+      await loadPage(nextPageIndex, 'more');
+    } catch (err: any) {
+      console.error('Error loading more pending submissions:', err);
+      setError(err?.message || 'Failed to load more pending submissions');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isLoadingMore, loadPage, pageSize, pendingSubmissions.length]);
+
+  // Update submission status (admin only)
+  const updateSubmissionStatus = useCallback(
+    async (
+      submissionId: number,
+      newStatus: 'approved' | 'rejected',
+      adminId: string,
+      adminNotes?: string
+    ) => {
+      try {
+        const { error: updateError } = await supabase
+          .from('submissions')
+          .update({
+            status: newStatus,
+            reviewed_by: adminId,
+            reviewed_at: new Date().toISOString(),
+            admin_notes: adminNotes || null,
+          })
+          .eq('id', submissionId);
+
+        if (updateError) {
+          console.error('Error updating submission:', updateError);
+          throw new Error('Failed to update submission status');
+        }
+
+        // Refresh the first page (handles removal from pending list)
+        await refresh();
+
+        return true;
+      } catch (err: any) {
+        console.error('Error updating submission:', err);
+        Alert.alert('Error', 'Failed to update submission');
+        return false;
+      }
+    },
+    [refresh]
+  );
+
+  return {
+    pendingSubmissions,
+    totalPendingCount,
+    isLoading: isLoadingInitial,
+    isRefreshing,
+    isLoadingMore,
+    hasMore,
+    error,
+    refresh,
+    loadMore,
+    updateSubmissionStatus,
+  };
+}
+
+// Hook specifically for admin pending submissions count (fast; avoids fetching full list)
+export function usePendingSubmissionsCount() {
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCount = useCallback(async () => {
+    setError(null);
+    const { count, error: countError } = await supabase
+      .from('submissions')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    if (countError) {
+      throw new Error(countError.message || 'Failed to fetch pending submissions count');
+    }
+
+    setPendingCount(count ?? 0);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    const run = async () => {
+      try {
+        setIsLoading(true);
+        await fetchCount();
+      } catch (err: any) {
+        console.error('Error fetching pending submissions count:', err);
+        if (!mounted) return;
+        setError(err?.message || 'Failed to fetch pending submissions count');
+      } finally {
+        if (!mounted) return;
+        setIsLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [fetchCount]);
+
+  return {
+    pendingCount,
+    isLoading,
+    error,
+    refetch: fetchCount,
+  };
+}
+
 // Hook for submission statistics (can be used for dashboards)
 export function useSubmissionStats(userId?: string) {
   const { submissions, isLoading, error } = useSubmissions({

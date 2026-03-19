@@ -3,16 +3,17 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Alert,
   Image,
   RefreshControl,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CircleCheck as CheckCircle, Circle as XCircle, Clock, User, Calendar, Store, Eye, RefreshCw } from 'lucide-react-native';
-import { usePendingSubmissions } from '@/hooks/useSubmissions';
+import { usePendingSubmissionsPaginated } from '@/hooks/useSubmissions';
 
 interface AdminTaskScreenProps {
   userData: any;
@@ -26,10 +27,15 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
   // Use the custom hook for pending submissions
   const {
     pendingSubmissions,
+    totalPendingCount,
     isLoading,
-    refetch,
+    isRefreshing,
+    refresh,
+    loadMore,
+    isLoadingMore,
+    hasMore,
     updateSubmissionStatus
-  } = usePendingSubmissions();
+  } = usePendingSubmissionsPaginated(5);
 
   // Handle approve submission
   const handleApprove = (submission: any) => {
@@ -120,43 +126,53 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
         <View style={styles.headerStats}>
           <View style={styles.statItem}>
             <Clock size={20} color="#E5C69E" />
-            <Text style={styles.statNumber}>{pendingSubmissions.length}</Text>
+            <Text style={styles.statNumber}>{totalPendingCount ?? pendingSubmissions.length}</Text>
             <Text style={styles.statLabel}>Pending</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView
+      <FlatList
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 90 }}
+        data={pendingSubmissions}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 90 }}
         refreshControl={
           <RefreshControl
-            refreshing={false}
-            onRefresh={() => refetch(true)}
+            refreshing={isRefreshing}
+            onRefresh={refresh}
             colors={['#F33F32']}
           />
         }
         showsVerticalScrollIndicator={false}
-      >
-        {pendingSubmissions.length === 0 ? (
+        onEndReached={() => {
+          if (hasMore) loadMore();
+        }}
+        onEndReachedThreshold={0.4}
+        ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListEmptyComponent={
           <View style={styles.emptyState}>
             <CheckCircle size={48} color="#22C55E" />
             <Text style={styles.emptyTitle}>All Caught Up!</Text>
             <Text style={styles.emptyDescription}>
               No pending submissions to review at the moment.
             </Text>
-            <TouchableOpacity 
-              style={styles.refreshButton}
-              onPress={() => refetch(true)}
-            >
+            <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
               <RefreshCw size={16} color="#206E56" />
               <Text style={styles.refreshButtonText}>Refresh</Text>
             </TouchableOpacity>
           </View>
-        ) : (
-          <View style={styles.submissionsList}>
-            {pendingSubmissions.map((submission) => (
-              <View key={submission.id} style={styles.submissionCard}>
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={styles.listFooterLoading}>
+              <ActivityIndicator size="small" color="#206E56" />
+              <Text style={styles.footerLoadingText}>Loading more...</Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item: submission }) => (
+          <View style={styles.submissionCard}>
                 {/* Header */}
                 <View style={styles.submissionHeader}>
                   <View style={styles.userInfo}>
@@ -249,10 +265,8 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
                   </TouchableOpacity>
                 </View>
               </View>
-            ))}
-          </View>
         )}
-      </ScrollView>
+      />
 
       {/* Image Modal */}
       <Modal
@@ -372,6 +386,17 @@ const styles = StyleSheet.create({
   submissionsList: {
     padding: 20,
     gap: 16,
+  },
+  listFooterLoading: {
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  footerLoadingText: {
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
   },
   submissionCard: {
     backgroundColor: 'white',

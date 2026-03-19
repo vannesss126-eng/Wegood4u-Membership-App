@@ -14,7 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Menu, Share2, Camera, SquareCheckBig, Trophy, SquareLibrary, Clock, ChevronRight, RefreshCw } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
-import { useUserSubmissions , usePendingSubmissions } from '@/hooks/useSubmissions';
+import { useUserSubmissions , usePendingSubmissionsCount } from '@/hooks/useSubmissions';
 
 import { uploadProfileImage, updateUserAvatar } from '@/services/imageUpload'
 import { router } from 'expo-router';
@@ -36,9 +36,9 @@ export default function ProfileScreen() {
 
   // Get pending submissions for admin
   const {
-    pendingSubmissions,
+    pendingCount,
     isLoading: isLoadingPending
-  } = usePendingSubmissions();
+  } = usePendingSubmissionsCount();
 
   // Show loading state while auth or user data is still resolving
   if (authLoading || userLoading) {
@@ -218,7 +218,7 @@ export default function ProfileScreen() {
               <View style={styles.adminStatItem}>
                 <Clock size={32} color="#F59E0B" />
                 <Text style={styles.adminStatNumber}>
-                  {isLoadingPending ? '...' : pendingSubmissions.length}
+                  {isLoadingPending ? '...' : (pendingCount ?? 0)}
                 </Text>
                 <Text style={styles.adminStatLabel}>Pending Submissions</Text>
               </View>
