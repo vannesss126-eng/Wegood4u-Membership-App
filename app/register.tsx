@@ -109,10 +109,16 @@ export default function RegisterScreen() {
 
     try {
       setSubmitting(true);
-      // Format date as YYYY-MM-DD for database if provided
-      const formattedDate = formData.dateOfBirth
-        ? formData.dateOfBirth.toISOString().split('T')[0]
-        : null;
+      // Format date as local YYYY-MM-DD for database if provided.
+      // Avoids timezone shifting caused by `toISOString()`.
+      const formatDateToYMD = (date: Date) => {
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const dd = String(date.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      };
+
+      const formattedDate = formData.dateOfBirth ? formatDateToYMD(formData.dateOfBirth) : null;
       await signUp(
         formData.email, 
         formData.password, 
@@ -308,12 +314,23 @@ export default function RegisterScreen() {
         <DateTimePicker
           value={formData.dateOfBirth || new Date()}
           mode="date"
-          display="default"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           maximumDate={new Date()}
           onChange={(event, selectedDate) => {
-            setShowDatePicker(false);
+            // `onChange` can fire multiple times on iOS; only close after a confirmed selection.
+            // On Android it is also common to close immediately after `set`.
+            const eventType = event?.type;
+            if (eventType === 'dismissed') {
+              setShowDatePicker(false);
+              return;
+            }
+
             if (selectedDate) {
               updateFormData('dateOfBirth', selectedDate);
+            }
+
+            if (Platform.OS === 'android' || eventType === 'set') {
+              setShowDatePicker(false);
             }
           }}
         />
