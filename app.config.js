@@ -40,6 +40,11 @@ module.exports = {
         }
       }
     },
+    androidStatusBar: {
+      barStyle: "light-content",
+      backgroundColor: "#206E56",
+      translucent: false
+    },
     plugins: [
       "expo-router",
       "expo-secure-store",

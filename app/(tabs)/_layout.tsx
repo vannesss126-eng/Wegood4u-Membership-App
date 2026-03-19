@@ -1,7 +1,12 @@
 import { Tabs } from 'expo-router';
 import { CircleEllipsis as Home, MapPin, SquareCheck as CheckSquare, User } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const TAB_BAR_CONTENT_HEIGHT = 68;
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
@@ -12,7 +17,8 @@ export default function TabLayout() {
           backgroundColor: '#206E56',
           borderTopColor: '#CBEED2',
           paddingTop: 8,
-          height: 120,
+          paddingBottom: insets.bottom,
+          height: TAB_BAR_CONTENT_HEIGHT + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 12,
