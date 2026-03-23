@@ -20,7 +20,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.saysheji.wegood4u",
-      buildNumber: "11",
+      buildNumber: "12",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -32,7 +32,7 @@ module.exports = {
       }
     },
     android: {
-      versionCode: 11,
+      versionCode: 12,
       package: "com.saysheji.wegood4u",
       config: {
         googleMaps: {
