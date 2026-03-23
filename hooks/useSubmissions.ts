@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Alert } from 'react-native';
 import type { 
@@ -176,19 +176,25 @@ export function usePendingSubmissions() {
 }
 
 // Hook specifically for admin pending submissions pagination
-// Uses Supabase `range()` to avoid loading the entire pending list at once.
-export function usePendingSubmissionsPaginated(pageSize: number = 5) {
+// Uses Supabase `range()` — one page at a time (not infinite scroll).
+export function usePendingSubmissionsPaginated(pageSize: number = 3) {
   const [pendingSubmissions, setPendingSubmissions] = useState<Submission[]>([]);
+  const [currentPage, setCurrentPage] = useState(0); // 0-based index
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [totalPendingCount, setTotalPendingCount] = useState<number | null>(null);
 
+  const currentPageRef = useRef(0);
+  currentPageRef.current = currentPage;
+
+  /** Only the first bootstrap should use full-screen loading; pageSize changes use inline spinner */
+  const isFirstBootstrapRef = useRef(true);
+
   const PENDING_SELECT = `*, profiles:user_id (username, full_name)`;
 
-  const fetchTotalPendingCount = useCallback(async () => {
+  const fetchTotalPendingCount = useCallback(async (): Promise<number> => {
     const { count, error: countError } = await supabase
       .from('submissions')
       .select('id', { count: 'exact', head: true })
@@ -198,69 +204,107 @@ export function usePendingSubmissionsPaginated(pageSize: number = 5) {
       throw new Error(countError.message || 'Failed to fetch pending submissions count');
     }
 
-    setTotalPendingCount(count ?? 0);
+    const n = count ?? 0;
+    setTotalPendingCount(n);
+    return n;
   }, []);
 
-  const loadPage = useCallback(
-    async (pageIndex: number, mode: 'initial' | 'refresh' | 'more') => {
-      const from = pageIndex * pageSize;
-      const to = from + pageSize - 1;
+  const loadPageForIndex = useCallback(
+    async (pageIndex: number, options?: { showPageSpinner?: boolean }) => {
+      const showSpinner = options?.showPageSpinner ?? false;
+      if (showSpinner) setIsLoadingPage(true);
 
-      const query = supabase
-        .from('submissions')
-        .select(PENDING_SELECT)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      try {
+        const from = pageIndex * pageSize;
+        const to = from + pageSize - 1;
 
-      const { data, error: fetchError } = await query;
-      if (fetchError) {
-        throw new Error(fetchError.message || 'Failed to fetch pending submissions');
+        const { data, error: fetchError } = await supabase
+          .from('submissions')
+          .select(PENDING_SELECT)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (fetchError) {
+          throw new Error(fetchError.message || 'Failed to fetch pending submissions');
+        }
+
+        setPendingSubmissions(data || []);
+        setCurrentPage(pageIndex);
+        currentPageRef.current = pageIndex;
+        setError(null);
+      } finally {
+        if (showSpinner) setIsLoadingPage(false);
       }
-
-      const page = data || [];
-
-      if (mode === 'more') {
-        setPendingSubmissions((prev) => [...prev, ...page]);
-      } else {
-        setPendingSubmissions(page);
-      }
-
-      setHasMore(page.length === pageSize);
-      setError(null);
     },
     [pageSize]
   );
 
+  const totalPages = useMemo(() => {
+    if (totalPendingCount === null) return 1;
+    if (totalPendingCount === 0) return 1;
+    return Math.max(1, Math.ceil(totalPendingCount / pageSize));
+  }, [totalPendingCount, pageSize]);
+
+  const goToPage = useCallback(
+    async (pageIndex: number) => {
+      const count = totalPendingCount ?? 0;
+      const maxPage = count === 0 ? 0 : Math.max(0, Math.ceil(count / pageSize) - 1);
+      if (pageIndex < 0 || pageIndex > maxPage) return;
+      await loadPageForIndex(pageIndex, { showPageSpinner: true });
+    },
+    [totalPendingCount, pageSize, loadPageForIndex]
+  );
+
+  const nextPage = useCallback(async () => {
+    await goToPage(currentPage + 1);
+  }, [currentPage, goToPage]);
+
+  const prevPage = useCallback(async () => {
+    await goToPage(currentPage - 1);
+  }, [currentPage, goToPage]);
+
   const refresh = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      setHasMore(true);
-      await Promise.all([fetchTotalPendingCount(), loadPage(0, 'refresh')]);
+      const count = await fetchTotalPendingCount();
+      const maxPage = count === 0 ? 0 : Math.max(0, Math.ceil(count / pageSize) - 1);
+      const targetPage = Math.min(currentPageRef.current, maxPage);
+      await loadPageForIndex(targetPage);
     } catch (err: any) {
       console.error('Error refreshing pending submissions:', err);
       setError(err?.message || 'Failed to refresh pending submissions');
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchTotalPendingCount, loadPage]);
+  }, [fetchTotalPendingCount, loadPageForIndex, pageSize]);
 
   useEffect(() => {
     let mounted = true;
     const bootstrap = async () => {
+      const showFullScreenLoader = isFirstBootstrapRef.current;
       try {
-        setIsLoadingInitial(true);
+        if (showFullScreenLoader) {
+          setIsLoadingInitial(true);
+        }
         setError(null);
-        setHasMore(true);
-
-        await Promise.all([fetchTotalPendingCount(), loadPage(0, 'initial')]);
+        const count = await fetchTotalPendingCount();
+        if (!mounted) return;
+        const maxPage = count === 0 ? 0 : Math.max(0, Math.ceil(count / pageSize) - 1);
+        const startPage = Math.min(currentPageRef.current, maxPage);
+        await loadPageForIndex(startPage, {
+          showPageSpinner: !showFullScreenLoader,
+        });
       } catch (err: any) {
         console.error('Error loading pending submissions:', err);
         if (!mounted) return;
         setError(err?.message || 'Failed to load pending submissions');
       } finally {
         if (!mounted) return;
-        setIsLoadingInitial(false);
+        if (showFullScreenLoader) {
+          setIsLoadingInitial(false);
+          isFirstBootstrapRef.current = false;
+        }
       }
     };
 
@@ -268,21 +312,7 @@ export function usePendingSubmissionsPaginated(pageSize: number = 5) {
     return () => {
       mounted = false;
     };
-  }, [fetchTotalPendingCount, loadPage]);
-
-  const loadMore = useCallback(async () => {
-    if (!hasMore || isLoadingMore) return;
-    try {
-      setIsLoadingMore(true);
-      const nextPageIndex = Math.floor(pendingSubmissions.length / pageSize);
-      await loadPage(nextPageIndex, 'more');
-    } catch (err: any) {
-      console.error('Error loading more pending submissions:', err);
-      setError(err?.message || 'Failed to load more pending submissions');
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [hasMore, isLoadingMore, loadPage, pageSize, pendingSubmissions.length]);
+  }, [fetchTotalPendingCount, loadPageForIndex, pageSize]);
 
   // Update submission status (admin only)
   const updateSubmissionStatus = useCallback(
@@ -308,7 +338,6 @@ export function usePendingSubmissionsPaginated(pageSize: number = 5) {
           throw new Error('Failed to update submission status');
         }
 
-        // Refresh the first page (handles removal from pending list)
         await refresh();
 
         return true;
@@ -324,13 +353,16 @@ export function usePendingSubmissionsPaginated(pageSize: number = 5) {
   return {
     pendingSubmissions,
     totalPendingCount,
+    currentPage,
+    totalPages,
     isLoading: isLoadingInitial,
     isRefreshing,
-    isLoadingMore,
-    hasMore,
+    isLoadingPage,
     error,
     refresh,
-    loadMore,
+    goToPage,
+    nextPage,
+    prevPage,
     updateSubmissionStatus,
   };
 }

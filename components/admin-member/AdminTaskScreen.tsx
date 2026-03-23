@@ -10,32 +10,51 @@ import {
   RefreshControl,
   Modal,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CircleCheck as CheckCircle, Circle as XCircle, Clock, User, Calendar, Store, Eye, RefreshCw } from 'lucide-react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  CircleCheck as CheckCircle,
+  Circle as XCircle,
+  Clock,
+  User,
+  Calendar,
+  Store,
+  Eye,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react-native';
 import { usePendingSubmissionsPaginated } from '@/hooks/useSubmissions';
 
 interface AdminTaskScreenProps {
   userData: any;
 }
 
+/** Phone: 3 submissions per page; tablet (min side ≥ 600): 6 per page */
+const TABLET_MIN_SHORT_SIDE = 600;
+
 export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
-  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const minSide = Math.min(width, height);
+  const pageSize = minSide >= TABLET_MIN_SHORT_SIDE ? 6 : 3;
 
-  // Use the custom hook for pending submissions
+  // Use the custom hook for pending submissions (page-by-page, not infinite scroll)
   const {
     pendingSubmissions,
     totalPendingCount,
+    currentPage,
+    totalPages,
     isLoading,
     isRefreshing,
+    isLoadingPage,
     refresh,
-    loadMore,
-    isLoadingMore,
-    hasMore,
-    updateSubmissionStatus
-  } = usePendingSubmissionsPaginated(5);
+    nextPage,
+    prevPage,
+    updateSubmissionStatus,
+  } = usePendingSubmissionsPaginated(pageSize);
 
   // Handle approve submission
   const handleApprove = (submission: any) => {
@@ -136,7 +155,12 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
         style={styles.content}
         data={pendingSubmissions}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 90 }}
+        // Tab bar already sits below this screen; only a small inset is needed so
+        // the pagination bar isn’t flush with the content edge (avoid huge gap).
+        contentContainerStyle={[
+          styles.listContentContainer,
+          { paddingBottom: 16 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -145,10 +169,6 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
           />
         }
         showsVerticalScrollIndicator={false}
-        onEndReached={() => {
-          if (hasMore) loadMore();
-        }}
-        onEndReachedThreshold={0.4}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -164,10 +184,47 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
           </View>
         }
         ListFooterComponent={
-          isLoadingMore ? (
-            <View style={styles.listFooterLoading}>
-              <ActivityIndicator size="small" color="#206E56" />
-              <Text style={styles.footerLoadingText}>Loading more...</Text>
+          totalPendingCount !== null && totalPendingCount > 0 ? (
+            <View style={styles.paginationBar}>
+              <TouchableOpacity
+                style={[
+                  styles.pageNavButton,
+                  currentPage <= 0 && styles.pageNavButtonDisabled,
+                ]}
+                onPress={() => prevPage()}
+                disabled={currentPage <= 0 || isLoadingPage}
+                accessibilityRole="button"
+                accessibilityLabel="Previous page"
+              >
+                <ChevronLeft
+                  size={22}
+                  color={currentPage <= 0 ? '#CBD5E1' : '#206E56'}
+                />
+              </TouchableOpacity>
+              <View style={styles.pageIndicator}>
+                {isLoadingPage ? (
+                  <ActivityIndicator size="small" color="#206E56" />
+                ) : (
+                  <Text style={styles.pageIndicatorText}>
+                    Page {currentPage + 1} of {totalPages}
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.pageNavButton,
+                  currentPage >= totalPages - 1 && styles.pageNavButtonDisabled,
+                ]}
+                onPress={() => nextPage()}
+                disabled={currentPage >= totalPages - 1 || isLoadingPage}
+                accessibilityRole="button"
+                accessibilityLabel="Next page"
+              >
+                <ChevronRight
+                  size={22}
+                  color={currentPage >= totalPages - 1 ? '#CBD5E1' : '#206E56'}
+                />
+              </TouchableOpacity>
             </View>
           ) : null
         }
@@ -346,6 +403,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+  listContentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -387,16 +448,35 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
   },
-  listFooterLoading: {
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+  paginationBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  footerLoadingText: {
-    color: '#64748B',
-    fontSize: 12,
-    fontWeight: '600',
+  pageNavButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  pageNavButtonDisabled: {
+    opacity: 0.5,
+  },
+  pageIndicator: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  pageIndicatorText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
   },
   submissionCard: {
     backgroundColor: 'white',
