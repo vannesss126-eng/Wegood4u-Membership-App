@@ -11,6 +11,7 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Upload, Camera, ChevronDown, CircleCheck as CheckCircle, Clock, X } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
+import { optimizeSubmissionImage } from '@/lib/optimizeSubmissionImage';
 import type { TransformedSubmission, PartnerStore, Submission } from '@/types';
 
 interface SubmissionProps {
@@ -98,14 +99,16 @@ export default function SubmissionComponent({
   };
 
   // Function to upload image to Supabase storage
-  const uploadImageToSupabase = async (imageUri: string, bucketName: string, fileName: string): Promise<string> => {
+  const uploadImageToSupabase = async (
+    imageUri: string,
+    bucketName: string,
+    fileName: string,
+    contentType: string
+  ): Promise<string> => {
     try {
       const response = await fetch(imageUri);
       const arrayBuffer = await response.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
-
-      // Infer content type from response headers if available, fallback to jpeg
-      const contentType = response.headers.get('Content-Type') || 'image/jpeg';
 
       // Upload to Supabase storage
       const { data, error } = await supabase.storage
@@ -153,17 +156,21 @@ export default function SubmissionComponent({
     setIsSubmitting(true);
     
     try {
-      // Generate unique file names
       const timestamp = Date.now();
-      const receiptFileName = `receipt_${userData.id}_${timestamp}.jpg`;
-      const selfieFileName = `selfie_${userData.id}_${timestamp}.jpg`;
+      const receiptFileName = `receipt_${userData.id}_${timestamp}.webp`;
+      const selfieFileName = `selfie_${userData.id}_${timestamp}.webp`;
+      const webpType = 'image/webp';
+
+      console.log('Optimizing images (WebP, max 1000px edge)...');
+      const [receiptOptimizedUri, selfieOptimizedUri] = await Promise.all([
+        optimizeSubmissionImage(receiptPhoto),
+        optimizeSubmissionImage(selfiePhoto),
+      ]);
 
       console.log('Starting image uploads...');
-      
-      // Upload both images concurrently
       const [receiptUrl, selfieUrl] = await Promise.all([
-        uploadImageToSupabase(receiptPhoto, 'submitted-receipt', receiptFileName),
-        uploadImageToSupabase(selfiePhoto, 'submitted-selfie', selfieFileName)
+        uploadImageToSupabase(receiptOptimizedUri, 'submitted-receipt', receiptFileName, webpType),
+        uploadImageToSupabase(selfieOptimizedUri, 'submitted-selfie', selfieFileName, webpType),
       ]);
 
       console.log('Images uploaded successfully:', { receiptUrl, selfieUrl });
