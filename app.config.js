@@ -22,6 +22,8 @@ module.exports = {
       bundleIdentifier: "com.saysheji.wegood4u",
       buildNumber: "12",
       infoPlist: {
+        CFBundleShortVersionString: "1.1.3",
+        CFBundleVersion: "12",
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
           "Wegood4u uses your location to show nearby partner cafes, restaurants, and travel experiences on the map.",
