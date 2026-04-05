@@ -3,6 +3,7 @@ export interface PartnerStore {
   name: string;
   type: string;
   city: string;
+  address: string;
   latitude: number;
   longitude: number;
   rating: number;
