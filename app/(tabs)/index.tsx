@@ -143,8 +143,13 @@ export default function HomeScreen() {
     }
   };
 
-  const renderStoreCard = (store: PartnerStore, index: number) => (
-    <View key={store.id} style={styles.storeCard}>
+  const renderStoreCard = (store: PartnerStore, section: 'restaurant' | 'cafe') => (
+    <TouchableOpacity
+      key={store.id}
+      style={styles.storeCard}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/partner-store/${section}/${store.id}`)}
+    >
       <Image source={{ uri: store.image }} style={styles.storeImage} />
       <View style={styles.storeInfo}>
         <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
@@ -158,7 +163,7 @@ export default function HomeScreen() {
           <Text style={styles.locationText} numberOfLines={1}>{store.city}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderRecommendationSection = (title: string, stores: PartnerStore[]) => (
@@ -172,9 +177,9 @@ export default function HomeScreen() {
           style={styles.circularButton}
           onPress={() => {
             if (title === 'Recommended Restaurant') {
-              router.push('../partner-store/Restaurant');
+              router.push('/partner-store/restaurant');
             } else if (title === 'Recommended Cafe') {
-              router.push('../partner-store/Cafe');
+              router.push('/partner-store/cafe');
             }
           }}
         >
@@ -188,7 +193,9 @@ export default function HomeScreen() {
         </View>
       ) : stores.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeList}>
-          {stores.map((store, index) => renderStoreCard(store, index))}
+          {stores.map((store) =>
+            renderStoreCard(store, title === 'Recommended Restaurant' ? 'restaurant' : 'cafe')
+          )}
         </ScrollView>
       ) : (
         <View style={styles.emptyContainer}>
