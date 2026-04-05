@@ -11,14 +11,12 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  ArrowLeft, 
-  Search, 
-  ArrowUpDown, 
-  MapPin, 
+import {
+  ArrowLeft,
+  Search,
+  ArrowUpDown,
+  MapPin,
   Star
-  // SlidersHorizontal, // Temporarily commented - filter UI hidden
-  // Globe // Temporarily commented - filter UI hidden
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { fetchPartnerStores } from '@/data/partnerStore';
@@ -27,8 +25,8 @@ import type { PartnerStore } from '@/types';
 type SortOption = 'rating' | 'alphabetical-az' | 'alphabetical-za';
 type LocationFilter = 'all' | 'malaysia' | 'thailand';
 
-export default function CafeScreen() {
-  const [cafes, setCafes] = useState<PartnerStore[]>([]);
+export default function RestaurantScreen() {
+  const [restaurants, setRestaurants] = useState<PartnerStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('rating');
@@ -37,57 +35,54 @@ export default function CafeScreen() {
   const [showLocationModal, setShowLocationModal] = useState(false);
 
   useEffect(() => {
-    loadCafes();
+    loadRestaurants();
   }, []);
 
-  const loadCafes = async () => {
+  const loadRestaurants = async () => {
     try {
       setIsLoading(true);
       const stores = await fetchPartnerStores();
-      
-      // Filter for cafes
-      const cafeStores = stores.filter(store => 
-        store.type.toLowerCase().includes('coffee') || 
-        store.type.toLowerCase().includes('dessert') ||
-        store.type.toLowerCase().includes('cafe')
+
+      const restaurantStores = stores.filter(store =>
+        store.type.toLowerCase().includes('restaurant') ||
+        store.type.toLowerCase().includes('italian') ||
+        store.type.toLowerCase().includes('japanese') ||
+        store.type.toLowerCase().includes('fast food') ||
+        store.type.toLowerCase().includes('healthy food')
       );
-      
-      setCafes(cafeStores);
+
+      setRestaurants(restaurantStores);
     } catch (error) {
-      console.error('Error loading cafes:', error);
-      Alert.alert('Error', 'Failed to load cafes');
+      console.error('Error loading restaurants:', error);
+      Alert.alert('Error', 'Failed to load restaurants');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Filter and sort cafes
-  const filteredAndSortedCafes = useMemo(() => {
-    let filtered = cafes;
+  const filteredAndSortedRestaurants = useMemo(() => {
+    let filtered = restaurants;
 
-    // Apply search filter
     if (searchQuery.trim()) {
-      filtered = filtered.filter(cafe =>
-        cafe.name.toLowerCase().includes(searchQuery.toLowerCase())
+      filtered = filtered.filter(restaurant =>
+        restaurant.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    // Apply location filter
     if (locationFilter !== 'all') {
       if (locationFilter === 'malaysia') {
-        filtered = filtered.filter(cafe => 
-          cafe.city.toLowerCase().includes('kuala lumpur') ||
-          cafe.city.toLowerCase().includes('malaysia')
+        filtered = filtered.filter(restaurant =>
+          restaurant.city.toLowerCase().includes('kuala lumpur') ||
+          restaurant.city.toLowerCase().includes('malaysia')
         );
       } else if (locationFilter === 'thailand') {
-        filtered = filtered.filter(cafe => 
-          cafe.city.toLowerCase().includes('chiang mai') ||
-          cafe.city.toLowerCase().includes('thailand')
+        filtered = filtered.filter(restaurant =>
+          restaurant.city.toLowerCase().includes('chiang mai') ||
+          restaurant.city.toLowerCase().includes('thailand')
         );
       }
     }
 
-    // Apply sorting
     const sorted = [...filtered];
     switch (sortBy) {
       case 'rating':
@@ -102,7 +97,7 @@ export default function CafeScreen() {
     }
 
     return sorted;
-  }, [cafes, searchQuery, sortBy, locationFilter]);
+  }, [restaurants, searchQuery, sortBy, locationFilter]);
 
   const getSortDisplayText = () => {
     switch (sortBy) {
@@ -121,31 +116,36 @@ export default function CafeScreen() {
     }
   };
 
-  const renderCafeCard = (cafe: PartnerStore) => (
-    <View key={cafe.id} style={styles.cafeCard}>
-      <Image source={{ uri: cafe.image }} style={styles.cafeImage} />
-      <View style={styles.cafeInfo}>
-        <Text style={styles.cafeName}>{cafe.name}</Text>
-        <View style={styles.cafeBottomContent}>
-          <View style={styles.cafeMeta}>
-            <Text style={styles.cafeType}>{cafe.type}</Text>
-            <Text style={styles.cafeDistance}>25km+</Text>
+  const renderRestaurantCard = (restaurant: PartnerStore) => (
+    <TouchableOpacity
+      key={restaurant.id}
+      style={styles.restaurantCard}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/partner-store/restaurant/${restaurant.id}`)}
+    >
+      <Image source={{ uri: restaurant.image }} style={styles.restaurantImage} />
+      <View style={styles.restaurantInfo}>
+        <Text style={styles.restaurantName}>{restaurant.name}</Text>
+        <View style={styles.restaurantBottomContent}>
+          <View style={styles.restaurantMeta}>
+            <Text style={styles.restaurantType}>{restaurant.type}</Text>
+            <Text style={styles.restaurantDistance}>25km+</Text>
           </View>
-          <View style={styles.cafeRating}>
+          <View style={styles.restaurantRating}>
             <Star size={16} color="#FFD700" fill="#FFD700" />
-            <Text style={styles.ratingText}>{cafe.rating}</Text>
+            <Text style={styles.ratingText}>{restaurant.rating}</Text>
             <Text style={styles.priceRange}>$$$</Text>
           </View>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading cafes...</Text>
+          <Text style={styles.loadingText}>Loading restaurants...</Text>
         </View>
       </SafeAreaView>
     );
@@ -153,27 +153,24 @@ export default function CafeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ArrowLeft size={24} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cafe</Text>
+        <Text style={styles.headerTitle}>Restaurant</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Search size={20} color="#9CA3AF" />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search cafes..."
+          placeholder="Search restaurants..."
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
 
-      {/* Filter Controls */}
       <View style={styles.filterContainer}>
         <TouchableOpacity
           style={styles.filterButton}
@@ -190,34 +187,27 @@ export default function CafeScreen() {
           <MapPin size={16} color="#64748B" />
           <Text style={styles.filterButtonText}>{getLocationDisplayText()}</Text>
         </TouchableOpacity>
-{/*
-        <TouchableOpacity style={styles.listViewButton}>
-          <SlidersHorizontal size={16} color="#64748B" />
-        </TouchableOpacity>
-*/}
       </View>
 
-      {/* Cafe Grid */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.cafeGrid}>
-          {filteredAndSortedCafes.map(renderCafeCard)}
+        <View style={styles.restaurantGrid}>
+          {filteredAndSortedRestaurants.map(renderRestaurantCard)}
         </View>
-        
-        {filteredAndSortedCafes.length === 0 && (
+
+        {filteredAndSortedRestaurants.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No cafes found</Text>
+            <Text style={styles.emptyStateText}>No restaurants found</Text>
             <Text style={styles.emptyStateSubtext}>Try adjusting your search or filters</Text>
           </View>
         )}
 
-        {filteredAndSortedCafes.length > 0 && (
+        {filteredAndSortedRestaurants.length > 0 && (
           <View style={styles.endMessage}>
             <Text style={styles.endMessageText}>You&apos;ve reached the end!</Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Sort Modal */}
       <Modal
         visible={showSortModal}
         transparent
@@ -285,7 +275,6 @@ export default function CafeScreen() {
         </View>
       </Modal>
 
-      {/* Location Modal */}
       <Modal
         visible={showLocationModal}
         transparent
@@ -431,27 +420,17 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  listViewButton: {
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   content: {
     flex: 1,
     paddingHorizontal: 20,
   },
-  cafeGrid: {
+  restaurantGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingBottom: 20,
   },
-  cafeCard: {
+  restaurantCard: {
     width: '48%',
     backgroundColor: 'white',
     borderRadius: 16,
@@ -463,40 +442,40 @@ const styles = StyleSheet.create({
     elevation: 3,
     overflow: 'hidden',
   },
-  cafeImage: {
+  restaurantImage: {
     width: '100%',
     height: 120,
   },
-  cafeInfo: {
+  restaurantInfo: {
     padding: 12,
     flex: 1,
     flexDirection: 'column',
     justifyContent: 'space-between',
   },
-  cafeName: {
+  restaurantName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 4,
   },
-  cafeBottomContent: {
+  restaurantBottomContent: {
     marginTop: 'auto',
   },
-  cafeMeta: {
+  restaurantMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
     gap: 8,
   },
-  cafeType: {
+  restaurantType: {
     fontSize: 12,
     color: '#64748b',
   },
-  cafeDistance: {
+  restaurantDistance: {
     fontSize: 12,
     color: '#64748b',
   },
-  cafeRating: {
+  restaurantRating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
