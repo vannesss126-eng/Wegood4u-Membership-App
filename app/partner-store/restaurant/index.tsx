@@ -9,17 +9,19 @@ import {
   Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import {
   ArrowLeft,
   Search,
   ArrowUpDown,
   MapPin,
-  Star
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { fetchPartnerStores } from '@/data/partnerStore';
+import { haversineDistanceM, formatDistanceM } from '@/lib/distance';
 import type { PartnerStore } from '@/types';
 
 type SortOption = 'rating' | 'alphabetical-az' | 'alphabetical-za';
@@ -33,10 +35,28 @@ export default function RestaurantScreen() {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [showSortModal, setShowSortModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     loadRestaurants();
+    loadUserLocation();
   }, []);
+
+  const loadUserLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      setUserLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+    } catch (error) {
+      console.warn('Error getting location for category:', error);
+    }
+  };
 
   const loadRestaurants = async () => {
     try {
@@ -129,12 +149,13 @@ export default function RestaurantScreen() {
         <View style={styles.restaurantBottomContent}>
           <View style={styles.restaurantMeta}>
             <Text style={styles.restaurantType}>{restaurant.type}</Text>
-            <Text style={styles.restaurantDistance}>25km+</Text>
-          </View>
-          <View style={styles.restaurantRating}>
-            <Star size={16} color="#FFD700" fill="#FFD700" />
-            <Text style={styles.ratingText}>{restaurant.rating}</Text>
-            <Text style={styles.priceRange}>$$$</Text>
+            {userLocation ? (
+              <Text style={styles.restaurantDistance}>
+                {formatDistanceM(haversineDistanceM(userLocation, { latitude: restaurant.latitude, longitude: restaurant.longitude }))}
+              </Text>
+            ) : (
+              <ActivityIndicator size="small" color="#64748b" style={{ transform: [{ scale: 0.7 }] }} />
+            )}
           </View>
         </View>
       </View>

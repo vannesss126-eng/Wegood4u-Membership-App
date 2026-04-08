@@ -4,8 +4,8 @@ import * as Location from 'expo-location';
 import PartnerStoreDetailContent from '@/components/partner-store/PartnerStoreDetailContent';
 import { fetchPartnerStoreById } from '@/data/partnerStore';
 import {
-  formatDistanceKm,
-  haversineDistanceKm,
+  formatDistanceM,
+  haversineDistanceM,
   isValidCoordinatePair,
 } from '@/lib/distance';
 import type { PartnerStore } from '@/types';
@@ -17,7 +17,7 @@ export default function RestaurantStoreDetailScreen() {
   const [store, setStore] = useState<PartnerStore | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [distanceLabel, setDistanceLabel] = useState('Distance unavailable');
+  const [distanceLabel, setDistanceLabel] = useState('Loading distance...');
 
   useEffect(() => {
     let isMounted = true;
@@ -60,7 +60,7 @@ export default function RestaurantStoreDetailScreen() {
     const loadDistance = async () => {
       if (!store || !isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude })) {
         if (isMounted) {
-          setDistanceLabel('Distance unavailable');
+          setDistanceLabel('Loading distance...');
         }
         return;
       }
@@ -69,7 +69,7 @@ export default function RestaurantStoreDetailScreen() {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           if (isMounted) {
-            setDistanceLabel('Distance unavailable');
+            setDistanceLabel('Loading distance...');
           }
           return;
         }
@@ -78,7 +78,7 @@ export default function RestaurantStoreDetailScreen() {
           accuracy: Location.Accuracy.Balanced,
         });
 
-        const distanceKm = haversineDistanceKm(
+        const distanceM = haversineDistanceM(
           {
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -90,11 +90,11 @@ export default function RestaurantStoreDetailScreen() {
         );
 
         if (isMounted) {
-          setDistanceLabel(`${formatDistanceKm(distanceKm)} from your current location`);
+          setDistanceLabel(`${formatDistanceM(distanceM)} from your current location`);
         }
       } catch {
         if (isMounted) {
-          setDistanceLabel('Distance unavailable');
+          setDistanceLabel('Loading distance...');
         }
       }
     };

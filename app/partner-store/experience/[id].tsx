@@ -10,7 +10,7 @@ import {
 } from '@/lib/distance';
 import type { PartnerStore } from '@/types';
 
-export default function CafeStoreDetailScreen() {
+export default function ExperienceStoreDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const storeId = Array.isArray(id) ? id[0] : id;
 
@@ -35,9 +35,7 @@ export default function CafeStoreDetailScreen() {
       setErrorMessage(null);
       const result = await fetchPartnerStoreById(storeId);
 
-      if (!isMounted) {
-        return;
-      }
+      if (!isMounted) return;
 
       if (!result) {
         setErrorMessage('Store not found.');
@@ -59,18 +57,14 @@ export default function CafeStoreDetailScreen() {
 
     const loadDistance = async () => {
       if (!store || !isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude })) {
-        if (isMounted) {
-          setDistanceLabel('Loading distance...');
-        }
+        if (isMounted) setDistanceLabel('Loading distance...');
         return;
       }
 
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          if (isMounted) {
-            setDistanceLabel('Loading distance...');
-          }
+          if (isMounted) setDistanceLabel('Loading distance...');
           return;
         }
 
@@ -79,23 +73,15 @@ export default function CafeStoreDetailScreen() {
         });
 
         const distanceM = haversineDistanceM(
-          {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          },
-          {
-            latitude: store.latitude,
-            longitude: store.longitude,
-          }
+          { latitude: location.coords.latitude, longitude: location.coords.longitude },
+          { latitude: store.latitude, longitude: store.longitude }
         );
 
         if (isMounted) {
           setDistanceLabel(`${formatDistanceM(distanceM)} from your current location`);
         }
       } catch {
-        if (isMounted) {
-          setDistanceLabel('Loading distance...');
-        }
+        if (isMounted) setDistanceLabel('Loading distance...');
       }
     };
 
@@ -108,7 +94,7 @@ export default function CafeStoreDetailScreen() {
 
   return (
     <PartnerStoreDetailContent
-      categoryLabel="Cafe"
+      categoryLabel="Experience"
       store={store}
       isLoading={isLoading}
       errorMessage={errorMessage}
