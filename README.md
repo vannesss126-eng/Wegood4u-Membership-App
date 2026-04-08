@@ -37,17 +37,19 @@ Approval/Rejection: The Admin can either approve the submission, which counts to
 ## 3. Badge & Reward System
 A gamified system to reward active members for their approved visits.
 
-Achievement Milestones: Members earn badges by reaching specific milestones (e.g., 10, 20, 30, 40 approved visits).
+Badge Categories: Members earn experience and badges based on the type of partner store visited:
 
-Badge Categories: Rewards are categorized based on the type of partner store visited:
+- Bar Explorer: For visits to partner bars.
 
-- Activity Badges: For total visits to any partner store.
+- Coffee Lover: For visits to partner cafes.
 
-- Cafe Badges: For visits specifically to partner cafes.
+- Foodie: For visits to partner restaurants.
 
-- Restaurant Badges: For visits specifically to partner restaurants.
+- Hotel Explorer: For visits to partner hotels.
 
-Visual Achievements: Each badge is represented by a unique image that will be displayed on the member's profile to showcase their accomplishments.
+Achievement Milestones (Tiers & Ranks): Members progress through four tiers (Bronze, Silver, Gold, Platinum) with three ranks (1, 2, 3) within each tier. The requirements scale progressively from 5 approved visits (Bronze 1) up to 120 approved visits (Platinum 3) per category.
+
+Visual Achievements: Each badge tier and category is represented by a dynamically colored UI and a unique image displayed on the member's profile to showcase their accomplishments.
 
 ## 4. Affiliate & Referral System
 This system is designed to drive user growth through member invitations.
