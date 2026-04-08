@@ -25,12 +25,12 @@ import {
 import type { PartnerStore } from '@/types';
 
 type PartnerStoreDetailContentProps = {
-  categoryLabel: 'Restaurant' | 'Cafe';
+  categoryLabel: string;
   store: PartnerStore | null;
   isLoading: boolean;
   errorMessage: string | null;
   onBack: () => void;
-  distanceLabel?: string;
+  distanceLabel?: string | React.ReactNode;
 };
 
 export default function PartnerStoreDetailContent({
@@ -39,7 +39,7 @@ export default function PartnerStoreDetailContent({
   isLoading,
   errorMessage,
   onBack,
-  distanceLabel = 'Distance unavailable',
+  distanceLabel = 'Loading distance...',
 }: PartnerStoreDetailContentProps) {
   const formatRating = (value: number) => {
     if (!Number.isFinite(value) || value <= 0) {
@@ -135,18 +135,38 @@ export default function PartnerStoreDetailContent({
           <View style={styles.infoGroup}>
             <InfoRow icon={<Phone size={16} color="#64748b" />} text={store.phone || 'No phone'} />
             <InfoRow icon={<MapPin size={16} color="#64748b" />} text={store.address || store.city} />
-            <InfoRow icon={<Navigation size={16} color="#64748b" />} text={distanceLabel} />
+            <View style={{ height: 16 }} />
+            <InfoRow 
+              icon={<Navigation size={16} color="#64748b" />} 
+              text={distanceLabel === 'Loading distance...' ? <Text style={{ fontStyle: 'italic' }}>Loading distance...</Text> : distanceLabel} 
+            />
             <InfoRow icon={<Clock3 size={16} color="#64748b" />} text={store.hours || 'Hours unavailable'} />
-            <InfoRow icon={<CalendarDays size={16} color="#64748b" />} text="Mon - Sun" />
-            <InfoRow icon={<Wallet size={16} color="#64748b" />} text="$$$" />
+            <InfoRow icon={<CalendarDays size={16} color="#64748b" />} text={store.days || 'Days unavailable'} />
+            <InfoRow icon={<Wallet size={16} color="#64748b" />} text={store.priceRange || 'Price unavailable'} />
           </View>
+
+          {store['menu-images'] && store['menu-images'].length > 0 && (
+            <View style={styles.menuSection}>
+              <Text style={styles.menuTitle}>Menu</Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.menuScrollContent}
+                style={styles.menuScrollView}
+              >
+                {store['menu-images'].map((imgUrl, index) => (
+                  <Image key={index} source={{ uri: imgUrl }} style={styles.menuImage} resizeMode="cover" />
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function InfoRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+function InfoRow({ icon, text }: { icon: React.ReactNode; text: React.ReactNode }) {
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoIcon}>{icon}</View>
@@ -299,5 +319,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1e293b',
     fontWeight: '600',
+  },
+  menuSection: {
+    marginTop: 28,
+  },
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  menuScrollView: {
+    marginHorizontal: -16,
+  },
+  menuScrollContent: {
+    paddingHorizontal: 16,
+    gap: 12,
+    flexDirection: 'row',
+  },
+  menuImage: {
+    width: 140,
+    height: 180,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
   },
 });
