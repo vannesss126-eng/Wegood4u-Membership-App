@@ -26,6 +26,9 @@ function mapDocToPartnerStore(docId: string, data: DocumentData): PartnerStore |
     phone: data.phone || '',
     hours: data.hours || '',
     description: data.description || '',
+    days: data.days,
+    priceRange: data.priceRange,
+    'menu-images': data['menu-images'],
   };
 }
 
