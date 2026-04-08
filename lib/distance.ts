@@ -3,7 +3,7 @@ export type Coordinates = {
   longitude: number;
 };
 
-const EARTH_RADIUS_KM = 6371;
+const EARTH_RADIUS_M = 6371000;
 
 export function isValidCoordinatePair(coords: Coordinates): boolean {
   return (
@@ -13,7 +13,7 @@ export function isValidCoordinatePair(coords: Coordinates): boolean {
   );
 }
 
-export function haversineDistanceKm(from: Coordinates, to: Coordinates): number {
+export function haversineDistanceM(from: Coordinates, to: Coordinates): number {
   const latDelta = toRadians(to.latitude - from.latitude);
   const lonDelta = toRadians(to.longitude - from.longitude);
 
@@ -25,23 +25,20 @@ export function haversineDistanceKm(from: Coordinates, to: Coordinates): number 
     Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lonDelta / 2) ** 2;
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return EARTH_RADIUS_KM * c;
+  return EARTH_RADIUS_M * c;
 }
 
-export function formatDistanceKm(distanceKm: number): string {
-  if (!Number.isFinite(distanceKm) || distanceKm < 0) {
-    return 'Distance unavailable';
+export function formatDistanceM(distanceM: number): string {
+  if (!Number.isFinite(distanceM) || distanceM < 0) {
+    return 'Loading distance...';
   }
 
-  if (distanceKm < 1) {
-    return '<1 km';
+  if (distanceM < 1000) {
+    return `${Math.round(distanceM)}m`;
   }
 
-  if (distanceKm < 10) {
-    return `${distanceKm.toFixed(1)} km`;
-  }
-
-  return `${Math.round(distanceKm)} km`;
+  const distanceKm = Math.floor(distanceM / 1000);
+  return `+${distanceKm}km`;
 }
 
 function toRadians(value: number): number {
