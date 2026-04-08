@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: "Wegood4u",
     slug: "wegood4u-mobile",
-    version: "1.1.3",
+    version: "1.1.4",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "wegood4u",
@@ -20,7 +20,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.saysheji.wegood4u",
-      buildNumber: "12",
+      buildNumber: "13",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -32,7 +32,7 @@ module.exports = {
       }
     },
     android: {
-      versionCode: 12,
+      versionCode: 13,
       package: "com.saysheji.wegood4u",
       config: {
         googleMaps: {
