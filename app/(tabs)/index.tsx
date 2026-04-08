@@ -40,75 +40,30 @@ export default function HomeScreen() {
   const { isAuthenticated } = useAuth();
   const [recommendedRestaurants, setRecommendedRestaurants] = useState<PartnerStore[]>([]);
   const [recommendedCafes, setRecommendedCafes] = useState<PartnerStore[]>([]);
+  const [recommendedBars, setRecommendedBars] = useState<PartnerStore[]>([]);
+  const [recommendedExperiences, setRecommendedExperiences] = useState<PartnerStore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Banner slider state
-  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const bannerFlatListRef = useRef<FlatList>(null);
-  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
-
   // Load partner stores and filter recommendations
   useEffect(() => {
     loadPartnerStores();
   }, []);
 
-  // Auto-scroll banner effect
-  useEffect(() => {
-    const startAutoScroll = () => {
-      autoScrollTimerRef.current = setInterval(() => {
-        setCurrentBannerIndex((prevIndex) => {
-          const nextIndex = (prevIndex + 1) % BANNER_IMAGES.length;
-          bannerFlatListRef.current?.scrollToIndex({
-            index: nextIndex,
-            animated: true,
-          });
-          return nextIndex;
-        });
-      }, AUTO_SCROLL_INTERVAL);
-    };
-
-    startAutoScroll();
-
-    return () => {
-      if (autoScrollTimerRef.current) {
-        clearInterval(autoScrollTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Handle manual scroll
-  const handleBannerScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    const index = Math.round(offsetX / BANNER_WIDTH);
-    if (index !== currentBannerIndex && index >= 0 && index < BANNER_IMAGES.length) {
-      setCurrentBannerIndex(index);
-      // Reset auto-scroll timer when user manually scrolls
-      if (autoScrollTimerRef.current) {
-        clearInterval(autoScrollTimerRef.current);
-        autoScrollTimerRef.current = setInterval(() => {
-          setCurrentBannerIndex((prevIndex) => {
-            const nextIndex = (prevIndex + 1) % BANNER_IMAGES.length;
-            bannerFlatListRef.current?.scrollToIndex({
-              index: nextIndex,
-              animated: true,
-            });
-            return nextIndex;
-          });
-        }, AUTO_SCROLL_INTERVAL);
-      }
-    }
-  }, [currentBannerIndex]);
-
-  // Render banner item
-  const renderBannerItem = useCallback(({ item, index }: { item: any; index: number }) => (
-    <View style={styles.bannerImageContainer}>
-      <Image
-        source={item}
-        style={styles.bannerImage}
-        resizeMode="cover"
-      />
-    </View>
-  ), []);
+  // Render static banner
+  const renderSingleBanner = (index: number) => {
+    if (index < 0 || index >= BANNER_IMAGES.length) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.bannerContainer}>
+          <Image
+            source={BANNER_IMAGES[index]}
+            style={{ width: '100%', height: 160 }}
+            resizeMode="cover"
+          />
+        </View>
+      </View>
+    );
+  };
 
   const loadPartnerStores = async () => {
     try {
@@ -133,8 +88,21 @@ export default function HomeScreen() {
         .sort((a, b) => b.rating - a.rating)
         .slice(0, 6);
 
+      // Filter and sort bars by rating (top 6)
+      const bars = stores
+        .filter(store => store.type.toLowerCase().includes('beverage') || 
+          store.type.toLowerCase().includes('bar'))
+        .sort((a, b) => b.rating - a.rating)
+        .slice(0, 6);
+
+      // Random experiences (top 10 shuffled)
+      const shuffled = [...stores].sort(() => 0.5 - Math.random());
+      const selectedExperiences = shuffled.slice(0, 10);
+
       setRecommendedRestaurants(restaurants);
       setRecommendedCafes(cafes);
+      setRecommendedBars(bars);
+      setRecommendedExperiences(selectedExperiences);
     } catch (error) {
       console.error('Error loading partner stores:', error);
       Alert.alert('Error', 'Failed to load partner stores');
@@ -143,7 +111,7 @@ export default function HomeScreen() {
     }
   };
 
-  const renderStoreCard = (store: PartnerStore, section: 'restaurant' | 'cafe') => (
+  const renderStoreCard = (store: PartnerStore, section: string) => (
     <TouchableOpacity
       key={store.id}
       style={styles.storeCard}
@@ -180,6 +148,10 @@ export default function HomeScreen() {
               router.push('/partner-store/restaurant');
             } else if (title === 'Recommended Cafe') {
               router.push('/partner-store/cafe');
+            } else if (title === 'Recommended Bar') {
+              router.push('/partner-store/bar');
+            } else if (title === 'Recommended Experience') {
+              router.push('/partner-store/experience');
             }
           }}
         >
@@ -193,9 +165,13 @@ export default function HomeScreen() {
         </View>
       ) : stores.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeList}>
-          {stores.map((store) =>
-            renderStoreCard(store, title === 'Recommended Restaurant' ? 'restaurant' : 'cafe')
-          )}
+          {stores.map((store) => {
+            let sec = 'restaurant';
+            if (title === 'Recommended Cafe') sec = 'cafe';
+            else if (title === 'Recommended Bar') sec = 'bar';
+            else if (title === 'Recommended Experience') sec = 'experience';
+            return renderStoreCard(store, sec);
+          })}
         </ScrollView>
       ) : (
         <View style={styles.emptyContainer}>
@@ -239,41 +215,8 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
 
-        {/* Promotional Banner Slider */}
-        <View style={styles.section}>
-          <View style={styles.bannerContainer}>
-            <FlatList
-              ref={bannerFlatListRef}
-              data={BANNER_IMAGES}
-              renderItem={renderBannerItem}
-              keyExtractor={(_, index) => `banner-${index}`}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handleBannerScroll}
-              getItemLayout={(_, index) => ({
-                length: BANNER_WIDTH,
-                offset: BANNER_WIDTH * index,
-                index,
-              })}
-              snapToInterval={BANNER_WIDTH}
-              decelerationRate="fast"
-              bounces={false}
-            />
-            {/* Pagination Dots */}
-            <View style={styles.paginationContainer}>
-              {BANNER_IMAGES.map((_, index) => (
-                <View
-                  key={`dot-${index}`}
-                  style={[
-                    styles.paginationDot,
-                    currentBannerIndex === index && styles.paginationDotActive,
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        </View>
+        {/* Promotion Banner 1 */}
+        {renderSingleBanner(0)}
 
         {/* Recommended Restaurants */}
         {renderRecommendationSection(
@@ -285,6 +228,21 @@ export default function HomeScreen() {
         {renderRecommendationSection(
           'Recommended Cafe', 
           recommendedCafes
+        )}
+
+        {/* Promotion Banner 2 */}
+        {renderSingleBanner(1)}
+
+        {/* Recommended Bars */}
+        {renderRecommendationSection(
+          'Recommended Bar', 
+          recommendedBars
+        )}
+
+        {/* Recommended Experiences */}
+        {renderRecommendationSection(
+          'Recommended Experience', 
+          recommendedExperiences
         )}
       </ScrollView>
     </SafeAreaView>
