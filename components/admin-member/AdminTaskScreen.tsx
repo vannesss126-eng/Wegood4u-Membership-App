@@ -265,6 +265,30 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
                   </View>
                 </View>
 
+                {(submission.receipt_date || submission.total_amount || submission.currency || submission.merchant_name) ? (
+                  <View style={styles.reviewSummary}>
+                    <Text style={styles.sectionTitle}>AI Receipt Review</Text>
+                    {submission.merchant_name ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>Merchant:</Text>
+                        <Text style={styles.reviewValue}>{submission.merchant_name}</Text>
+                      </View>
+                    ) : null}
+                    {submission.receipt_date ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>Receipt Date:</Text>
+                        <Text style={styles.reviewValue}>{submission.receipt_date}</Text>
+                      </View>
+                    ) : null}
+                    {submission.total_amount !== null ? (
+                      <View style={styles.reviewRow}>
+                        <Text style={styles.reviewLabel}>Total:</Text>
+                        <Text style={styles.reviewValue}>{submission.currency ? `${submission.currency} ` : ''}{submission.total_amount}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 {/* Images */}
                 <View style={styles.imagesSection}>
                   <Text style={styles.sectionTitle}>Submitted Photos</Text>
@@ -538,6 +562,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'capitalize',
+  },
+  reviewSummary: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewLabel: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  reviewValue: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '500',
+    textAlign: 'right',
   },
   imagesSection: {
     marginBottom: 20,
