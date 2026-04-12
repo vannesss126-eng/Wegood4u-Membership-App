@@ -7,6 +7,11 @@ export interface Submission {
   status: 'pending' | 'approved' | 'rejected';
   selfie_url: string;
   receipt_url: string;
+  receipt_date: string | null;
+  total_amount: number | null;
+  currency: string | null;
+  merchant_name: string | null;
+  receipt_hash: string | null;
   admin_notes: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
