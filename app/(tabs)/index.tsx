@@ -19,21 +19,76 @@ import {
   MapPin,
   ChevronRight as ChevronRightIcon,
 } from 'lucide-react-native';
+import banners, { Banner } from '@/data/banners';
 import { useUser } from '@/context/UserContext';
 import { useAuth } from '@/context/AuthContext';
 import { fetchPartnerStores } from '@/data/partnerStore';
 import { router } from 'expo-router';
 import type { PartnerStore } from '@/types';
 
-// Banner images
-const BANNER_IMAGES = [
-  require('@/assets/images/fnb-banner.png'),
-  require('@/assets/images/hotel-banner.png'),
-];
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_WIDTH = SCREEN_WIDTH - 40; // Account for padding
 const AUTO_SCROLL_INTERVAL = 4000; // 4 seconds
+
+const PromoBannerCarousel = ({ promoBanners }: { promoBanners: Banner[] }) => {
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (!promoBanners.length) return;
+
+    const interval = setInterval(() => {
+      setActiveIndex((currentIndex) => {
+        const nextIndex = (currentIndex + 1) % promoBanners.length;
+        scrollRef.current?.scrollTo({
+          x: nextIndex * (BANNER_WIDTH + 16),
+          animated: true,
+        });
+        return nextIndex;
+      });
+    }, AUTO_SCROLL_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [promoBanners.length]);
+
+  return (
+    <View style={styles.promoSection}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.promoList}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(
+            event.nativeEvent.contentOffset.x / (BANNER_WIDTH + 16)
+          );
+          setActiveIndex(index);
+        }}
+      >
+        {promoBanners.map((banner) => (
+          <View key={banner.object_name} style={styles.promoCard}>
+            <Image
+              source={{ uri: banner.public_url }}
+              style={styles.promoImage}
+              resizeMode="cover"
+            />
+          </View>
+        ))}
+      </ScrollView>
+      <View style={styles.paginationContainer}>
+        {promoBanners.map((_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.paginationDot,
+              index === activeIndex && styles.paginationDotActive,
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+};
 
 export default function HomeScreen() {
   const { userData } = useUser();
@@ -49,21 +104,9 @@ export default function HomeScreen() {
     loadPartnerStores();
   }, []);
 
-  // Render static banner
-  const renderSingleBanner = (index: number) => {
-    if (index < 0 || index >= BANNER_IMAGES.length) return null;
-    return (
-      <View style={styles.section}>
-        <View style={styles.bannerContainer}>
-          <Image
-            source={BANNER_IMAGES[index]}
-            style={{ width: '100%', height: 160 }}
-            resizeMode="cover"
-          />
-        </View>
-      </View>
-    );
-  };
+  const restaurantPromoBanners = banners.filter((banner) => banner.category === 'restaurant');
+  const cafePromoBanners = banners.filter((banner) => banner.category === 'cafe');
+  const barPromoBanners = banners.filter((banner) => banner.category === 'bar');
 
   const loadPartnerStores = async () => {
     try {
@@ -215,8 +258,7 @@ export default function HomeScreen() {
           </View>
         </LinearGradient>
 
-        {/* Promotion Banner 1 */}
-        {renderSingleBanner(0)}
+        <PromoBannerCarousel promoBanners={restaurantPromoBanners} />
 
         {/* Recommended Restaurants */}
         {renderRecommendationSection(
@@ -230,8 +272,7 @@ export default function HomeScreen() {
           recommendedCafes
         )}
 
-        {/* Promotion Banner 2 */}
-        {renderSingleBanner(1)}
+        <PromoBannerCarousel promoBanners={cafePromoBanners} />
 
         {/* Recommended Bars */}
         {renderRecommendationSection(
@@ -244,6 +285,8 @@ export default function HomeScreen() {
           'Recommended Experience', 
           recommendedExperiences
         )}
+
+        <PromoBannerCarousel promoBanners={barPromoBanners} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -345,6 +388,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  promoSection: {
+    marginBottom: 24,
+  },
+  promoList: {
+    paddingHorizontal: 20,
+  },
+  promoCard: {
+    width: BANNER_WIDTH,
+    height: 160,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginRight: 16,
+    backgroundColor: '#f8fafc',
+  },
+  promoImage: {
     width: '100%',
     height: '100%',
   },
