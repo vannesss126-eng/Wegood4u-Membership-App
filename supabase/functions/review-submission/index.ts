@@ -11,9 +11,9 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
 
-if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
-  console.error("Missing SUPABASE_URL or SERVICE_ROLE_KEY");
-  throw new Error("Missing Supabase environment variables");
+if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANTHROPIC_API_KEY) {
+  console.error("Missing SUPABASE_URL or SERVICE_ROLE_KEY or ANTHROPIC_API_KEY");
+  throw new Error("Missing environment variables");
 }
 
 const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
@@ -148,7 +148,7 @@ async function extractReceiptData(receiptUrl: string): Promise<{
 
 If a field cannot be determined accurately, return null for that field.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/complete", {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -156,7 +156,12 @@ If a field cannot be determined accurately, return null for that field.`;
     },
     body: JSON.stringify({
       model: "claude-3.5-mini",
-      prompt,
+      messages: [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
       max_tokens_to_sample: 400,
       temperature: 0,
       top_p: 1,
@@ -359,3 +364,4 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Internal server error", details: (error as Error).message }, 500);
   }
 });
+
