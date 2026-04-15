@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Menu, Share2, Camera, SquareCheckBig, Trophy, SquareLibrary, Clock, Che
 import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
 import { useUserSubmissions , usePendingSubmissionsCount } from '@/hooks/useSubmissions';
+import { supabase } from '@/lib/supabase';
 
 import { uploadProfileImage, updateUserAvatar } from '@/services/imageUpload'
 import { router } from 'expo-router';
@@ -26,6 +27,7 @@ export default function ProfileScreen() {
   const { userData, isLoading: userLoading, refreshUserData } = useUser();
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [showSettingsOverlay, setShowSettingsOverlay] = useState(false);
+  const [dailySubmissionCount, setDailySubmissionCount] = useState(0);
   
   // Get user submissions data for members/affiliates
   const {
@@ -39,6 +41,32 @@ export default function ProfileScreen() {
     pendingCount,
     isLoading: isLoadingPending
   } = usePendingSubmissionsCount();
+
+  // Fetch today's submission count for the user
+  const fetchDailySubmissionCount = async () => {
+    if (!userData?.id) return;
+    
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
+    
+    const { count, error } = await supabase
+      .from('submissions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userData.id)
+      .gte('created_at', startOfDay)
+      .lt('created_at', endOfDay);
+    
+    if (error) {
+      console.error('Error fetching daily count:', error);
+    } else {
+      setDailySubmissionCount(count || 0);
+    }
+  };
+
+  useEffect(() => {
+    fetchDailySubmissionCount();
+  }, [userData?.id]);
 
   // Show loading state while auth or user data is still resolving
   if (authLoading || userLoading) {
@@ -230,10 +258,15 @@ export default function ProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <SquareCheckBig size={20} color="#22C55E" />
-                <Text style={styles.statNumber}>
-                  {isLoadingSubmissions ? '...' : stats.approved}
-                </Text>
-                <Text style={styles.statLabel}>Task Done</Text>
+                <View style={styles.statNumberContainer}>
+                  <Text style={styles.statNumber}>
+                    {isLoadingSubmissions ? '...' : dailySubmissionCount}
+                  </Text>
+                  <Text style={styles.statNumberMax}>
+                    /{isLoadingSubmissions ? '...' : 20}
+                  </Text>
+                </View>
+                <Text style={styles.statLabel}>Today</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
@@ -438,6 +471,18 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginTop: 8,
     marginBottom: 4,
+  },
+  statNumberContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statNumberMax: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+    marginLeft: 2,
   },
   statLabel: {
     fontSize: 12,
