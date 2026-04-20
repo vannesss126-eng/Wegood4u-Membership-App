@@ -27,6 +27,36 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Claude Vision caps each image at 5MB as base64-encoded data (~3.75MB raw).
+// Keep raw bytes safely under that so the encoded payload never exceeds the cap.
+const MAX_IMAGE_RAW_BYTES = 3_670_016;
+// Profile UUID used as `reviewed_by` for AI auto-reviews.
+// Points to the wegood4u@gmail.com admin account, which is dedicated to the AI reviewer.
+// `admin_notes` is the source of truth for whether a decision came from the AI vs a human.
+const AI_REVIEWER_ID = "11b60765-9911-4985-9cbf-0ba4d568303c";
+const CLAUDE_MODEL = "claude-sonnet-4-6";
+const RECEIPT_MAX_AGE_DAYS = 21;
+
+type MediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+
+interface FetchedImage {
+  bytes: Uint8Array;
+  mediaType: MediaType;
+}
+
+interface ExtractedSubmission {
+  receipt: {
+    date: string | null;
+    total_amount: number | null;
+    currency: string | null;
+    merchant_name: string | null;
+  };
+  selfie: {
+    person_visible: boolean;
+    receipt_visible: boolean;
+  };
+}
+
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -48,46 +78,10 @@ function parseSubmissionId(body: any): number | null {
   for (const candidate of candidates) {
     if (candidate === undefined || candidate === null) continue;
     if (typeof candidate === "number") return candidate;
-    if (typeof candidate === "string" && /^\\d+$/.test(candidate)) return Number(candidate);
+    if (typeof candidate === "string" && /^\d+$/.test(candidate)) return Number(candidate);
   }
 
   return null;
-}
-
-async function fetchImageBytes(url: string): Promise<Uint8Array> {
-  try {
-    const response = await fetch(url);
-    if (response.ok) {
-      const buffer = await response.arrayBuffer();
-      return new Uint8Array(buffer);
-    }
-  } catch (error) {
-    console.warn("Receipt fetch failed via URL, falling back to storage path", error);
-  }
-
-  const parsed = parseSupabaseStoragePath(url);
-  if (!parsed) {
-    throw new Error("Unable to resolve image URL to Supabase storage path");
-  }
-
-  const { data, error } = await supabaseAdmin.storage
-    .from(parsed.bucket)
-    .download(parsed.path);
-
-  if (error || !data) {
-    throw new Error(`Failed to download image from storage: ${error?.message ?? "unknown"}`);
-  }
-
-  if (typeof (data as any).arrayBuffer === "function") {
-    const buffer = await (data as any).arrayBuffer();
-    return new Uint8Array(buffer);
-  }
-
-  if (data instanceof Uint8Array) {
-    return data;
-  }
-
-  throw new Error("Unsupported storage response type when downloading image");
 }
 
 function parseSupabaseStoragePath(urlString: string): { bucket: string; path: string } | null {
@@ -115,6 +109,91 @@ function parseSupabaseStoragePath(urlString: string): { bucket: string; path: st
   }
 }
 
+function detectMediaType(bytes: Uint8Array, contentType: string | null, url: string): MediaType {
+  if (contentType) {
+    const normalized = contentType.split(";")[0].trim().toLowerCase();
+    if (normalized === "image/jpeg" || normalized === "image/jpg") return "image/jpeg";
+    if (normalized === "image/png") return "image/png";
+    if (normalized === "image/webp") return "image/webp";
+    if (normalized === "image/gif") return "image/gif";
+  }
+
+  if (bytes.length >= 4) {
+    if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
+    if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "image/png";
+    if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+    if (
+      bytes.length >= 12 &&
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    ) return "image/webp";
+  }
+
+  try {
+    const ext = new URL(url).pathname.split(".").pop()?.toLowerCase();
+    if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+    if (ext === "png") return "image/png";
+    if (ext === "webp") return "image/webp";
+    if (ext === "gif") return "image/gif";
+  } catch {
+    // ignore
+  }
+
+  return "image/jpeg";
+}
+
+async function fetchImageBytes(url: string): Promise<FetchedImage> {
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const contentType = response.headers.get("content-type");
+      const buffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      return { bytes, mediaType: detectMediaType(bytes, contentType, url) };
+    }
+  } catch (error) {
+    console.warn("Image fetch failed via URL, falling back to storage path", error);
+  }
+
+  const parsed = parseSupabaseStoragePath(url);
+  if (!parsed) {
+    throw new Error("Unable to resolve image URL to Supabase storage path");
+  }
+
+  const { data, error } = await supabaseAdmin.storage
+    .from(parsed.bucket)
+    .download(parsed.path);
+
+  if (error || !data) {
+    throw new Error(`Failed to download image from storage: ${error?.message ?? "unknown"}`);
+  }
+
+  let bytes: Uint8Array;
+  let contentType: string | null = null;
+
+  if (typeof (data as any).arrayBuffer === "function") {
+    const buffer = await (data as any).arrayBuffer();
+    bytes = new Uint8Array(buffer);
+    contentType = typeof (data as any).type === "string" ? (data as any).type : null;
+  } else if (data instanceof Uint8Array) {
+    bytes = data;
+  } else {
+    throw new Error("Unsupported storage response type when downloading image");
+  }
+
+  return { bytes, mediaType: detectMediaType(bytes, contentType, url) };
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  // Chunked conversion to avoid stack overflow on multi-MB images.
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + CHUNK)));
+  }
+  return btoa(binary);
+}
+
 async function sha256(bytes: Uint8Array): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -127,44 +206,86 @@ function normalizeDate(input: string): string | null {
   return parsed.toISOString().slice(0, 10);
 }
 
-async function extractReceiptData(receiptUrl: string): Promise<{
-  date: string | null;
-  total_amount: number | null;
-  currency: string | null;
-  merchant_name: string | null;
-}> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not set");
-  }
-
-  const prompt = `You are an AI receipt parser. The receipt image is available at the following URL: ${receiptUrl}. Extract the following fields and return EXACTLY valid JSON only, without any explanatory text.
-
-{
-  "date": "YYYY-MM-DD" | null,
-  "total_amount": numeric | null,
-  "currency": string | null,
-  "merchant_name": string | null
+function merchantNameMatches(extractedName: string | null, partnerStoreName: string | null): boolean {
+  if (!extractedName || !partnerStoreName) return false;
+  const a = extractedName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const b = partnerStoreName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!a || !b) return false;
+  return a.includes(b) || b.includes(a);
 }
 
-If a field cannot be determined accurately, return null for that field.`;
+function isReceiptTooOld(receiptDate: string, submissionCreatedAt: string): boolean {
+  const receipt = new Date(receiptDate);
+  const submitted = new Date(submissionCreatedAt);
+  if (Number.isNaN(receipt.getTime()) || Number.isNaN(submitted.getTime())) return false;
+  const diffMs = submitted.getTime() - receipt.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays > RECEIPT_MAX_AGE_DAYS;
+}
+
+async function extractSubmissionData(
+  receipt: FetchedImage,
+  selfie: FetchedImage,
+): Promise<ExtractedSubmission> {
+  const receiptB64 = encodeBase64(receipt.bytes);
+  const selfieB64 = encodeBase64(selfie.bytes);
+
+  const prompt = `You are reviewing a loyalty-program submission. You are shown two images:
+- Image 1: the RECEIPT photo.
+- Image 2: the SELFIE the user took when submitting.
+
+Return EXACTLY valid JSON matching this schema, with no surrounding text, no markdown fencing, and no explanation:
+
+{
+  "receipt": {
+    "date": "YYYY-MM-DD" | null,
+    "total_amount": number | null,
+    "currency": string | null,
+    "merchant_name": string | null
+  },
+  "selfie": {
+    "person_visible": boolean,
+    "receipt_visible": boolean
+  }
+}
+
+Field rules:
+- receipt.date: transaction date printed on the receipt, normalized to ISO YYYY-MM-DD. null if unreadable.
+- receipt.total_amount: numeric grand total paid (just the number, e.g. 42.5). null if unreadable.
+- receipt.currency: currency code as printed (e.g. "MYR", "USD", "RM"). null if not clearly indicated.
+- receipt.merchant_name: merchant or store name as printed at the top of the receipt. null if unreadable.
+- selfie.person_visible: true ONLY if a clearly recognizable human face is visible in the selfie image.
+- selfie.receipt_visible: true ONLY if a physical paper receipt is also visible in the selfie image (typically held in frame by the person).
+
+Return the JSON object only.`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": ANTHROPIC_API_KEY,
+      "content-type": "application/json",
+      "x-api-key": ANTHROPIC_API_KEY!,
+      "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-3.5-mini",
+      model: CLAUDE_MODEL,
+      max_tokens: 1024,
+      temperature: 0,
       messages: [
         {
           role: "user",
-          content: prompt,
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: receipt.mediaType, data: receiptB64 },
+            },
+            {
+              type: "image",
+              source: { type: "base64", media_type: selfie.mediaType, data: selfieB64 },
+            },
+            { type: "text", text: prompt },
+          ],
         },
       ],
-      max_tokens_to_sample: 400,
-      temperature: 0,
-      top_p: 1,
     }),
   });
 
@@ -174,36 +295,71 @@ If a field cannot be determined accurately, return null for that field.`;
   }
 
   const result = await response.json();
-  const completionText = (result?.completion ?? result?.output ?? "").toString();
+  const textBlock = Array.isArray(result?.content)
+    ? result.content.find((block: any) => block?.type === "text")
+    : null;
+  const completionText = typeof textBlock?.text === "string" ? textBlock.text : "";
   const jsonMatch = completionText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    throw new Error("Unable to parse receipt extraction response as JSON");
+    throw new Error("Unable to parse submission analysis response as JSON");
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
-  const totalAmount = parsed.total_amount !== undefined && parsed.total_amount !== null
-    ? Number(parsed.total_amount)
+  const receiptData = parsed?.receipt ?? {};
+  const selfieData = parsed?.selfie ?? {};
+  const totalAmountRaw = receiptData.total_amount;
+  const totalAmount = totalAmountRaw !== undefined && totalAmountRaw !== null
+    ? Number(totalAmountRaw)
     : NaN;
 
   return {
-    date: parsed.date ? normalizeDate(parsed.date) : null,
-    total_amount: Number.isFinite(totalAmount) ? totalAmount : null,
-    currency: parsed.currency ? String(parsed.currency).trim() : null,
-    merchant_name: parsed.merchant_name ? String(parsed.merchant_name).trim() : null,
+    receipt: {
+      date: receiptData.date ? normalizeDate(receiptData.date) : null,
+      total_amount: Number.isFinite(totalAmount) ? totalAmount : null,
+      currency: receiptData.currency ? String(receiptData.currency).trim() : null,
+      merchant_name: receiptData.merchant_name ? String(receiptData.merchant_name).trim() : null,
+    },
+    selfie: {
+      person_visible: selfieData.person_visible === true,
+      receipt_visible: selfieData.receipt_visible === true,
+    },
   };
 }
 
-async function checkDuplicateSubmission(
+async function checkHashDuplicate(submissionId: number, userId: string, receiptHash: string) {
+  const { data, error } = await supabaseAdmin
+    .from("submissions")
+    .select("id, status")
+    .eq("user_id", userId)
+    .eq("receipt_hash", receiptHash)
+    .in("status", ["approved", "pending"])
+    .neq("id", submissionId)
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to query hash duplicates: ${error.message}`);
+  }
+
+  const prior = data?.[0];
+  if (prior) {
+    return {
+      found: true as const,
+      reason: `Duplicate receipt image detected against submission #${prior.id} (${prior.status}).`,
+    };
+  }
+  return { found: false as const, reason: null };
+}
+
+async function checkFuzzyDuplicate(
   submission: any,
-  receiptHash: string,
-  receiptDate: string | null,
-  totalAmount: number | null
+  receiptDate: string,
+  totalAmount: number,
 ) {
   const { data: priorSubmissions, error } = await supabaseAdmin
     .from("submissions")
-    .select("id, receipt_hash, partner_store_name, receipt_date, total_amount, status")
+    .select("id, partner_store_name, receipt_date, total_amount, status")
     .eq("user_id", submission.user_id)
-    .eq("status", "approved")
+    .in("status", ["approved", "pending"])
     .neq("id", submission.id);
 
   if (error) {
@@ -214,36 +370,29 @@ async function checkDuplicateSubmission(
   const tolerance = 0.05;
 
   for (const prior of priorSubmissions || []) {
-    if (prior.receipt_hash && prior.receipt_hash === receiptHash) {
-      return {
-        found: true,
-        reason: `Duplicate receipt image detected against approved submission #${prior.id}.`,
-      };
-    }
-
     const priorStore = String(prior.partner_store_name || "").trim().toLowerCase();
     const sameStore = normalizedStore && priorStore === normalizedStore;
-    const sameDate = receiptDate && prior.receipt_date === receiptDate;
-    const amountClose = typeof totalAmount === "number" && typeof prior.total_amount === "number"
+    const sameDate = prior.receipt_date === receiptDate;
+    const amountClose = typeof prior.total_amount === "number"
       ? Math.abs(totalAmount - Number(prior.total_amount)) <= tolerance
       : false;
 
     if (sameStore && sameDate && amountClose) {
       return {
-        found: true,
-        reason: `Same store, same date, and same amount detected against approved submission #${prior.id}.`,
+        found: true as const,
+        reason: `Same store, same date, and same amount as submission #${prior.id} (${prior.status}).`,
       };
     }
 
     if (sameStore && sameDate) {
       return {
-        found: true,
-        reason: `Possible duplicate: same store and receipt date as approved submission #${prior.id}.`,
+        found: true as const,
+        reason: `Same store and receipt date as submission #${prior.id} (${prior.status}).`,
       };
     }
   }
 
-  return { found: false, reason: null };
+  return { found: false as const, reason: null };
 }
 
 Deno.serve(async (req: Request) => {
@@ -280,60 +429,132 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const receiptBytes = await fetchImageBytes(submission.receipt_url);
-    const receiptHash = await sha256(receiptBytes);
+    // Atomic claim: only one invocation proceeds past this point per submission.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+      .from("submissions")
+      .update({ reviewed_by: AI_REVIEWER_ID })
+      .eq("id", submissionId)
+      .eq("status", "pending")
+      .is("reviewed_by", null)
+      .select("id");
 
-    let extracted: {
-      date: string | null;
-      total_amount: number | null;
-      currency: string | null;
-      merchant_name: string | null;
-    } = {
-      date: null,
-      total_amount: null,
-      currency: null,
-      merchant_name: null,
-    };
-
-    let aiError: string | null = null;
-    try {
-      extracted = await extractReceiptData(submission.receipt_url);
-    } catch (error) {
-      console.warn("Receipt extraction failed", error);
-      aiError = (error as Error).message;
+    if (claimError) {
+      console.error("Failed to claim submission", claimError);
+      return jsonResponse({
+        error: "Failed to claim submission for review",
+        details: claimError.message,
+      }, 500);
     }
 
-    const receiptDate = extracted.date;
-    const totalAmount = extracted.total_amount;
-    const missingFields: string[] = [];
-    if (!receiptDate) missingFields.push("date");
-    if (totalAmount === null) missingFields.push("total amount");
+    if (!claimed || claimed.length === 0) {
+      return jsonResponse({
+        submission_id: submissionId,
+        warning: "Submission already claimed by another reviewer — skipping.",
+      });
+    }
 
-    let decision: "approved" | "rejected" | "pending" = "pending";
-    let adminNotes = "AI review pending manual confirmation.";
-    let duplicateMatch: string | null = null;
+    let receiptImg: FetchedImage;
+    let selfieImg: FetchedImage;
+    try {
+      [receiptImg, selfieImg] = await Promise.all([
+        fetchImageBytes(submission.receipt_url),
+        fetchImageBytes(submission.selfie_url),
+      ]);
+    } catch (error) {
+      console.error("Failed to fetch submission images", error);
+      const notes = `Failed to download submission images: ${(error as Error).message}`;
+      await supabaseAdmin
+        .from("submissions")
+        .update({ admin_notes: notes, reviewed_by: AI_REVIEWER_ID })
+        .eq("id", submissionId);
+      return jsonResponse({
+        error: "Failed to fetch submission images",
+        details: (error as Error).message,
+      }, 500);
+    }
 
-    if (receiptDate && totalAmount !== null) {
-      const duplicate = await checkDuplicateSubmission(submission, receiptHash, receiptDate, totalAmount);
-      if (duplicate.found) {
-        decision = "rejected";
-        adminNotes = duplicate.reason || "Duplicate submission detected.";
-        duplicateMatch = duplicate.reason;
-      } else {
-        decision = "approved";
-        adminNotes = "Auto-approved by AI review. Receipt date and total amount extracted successfully.";
+    const receiptHash = await sha256(receiptImg.bytes);
+
+    const hashDup = await checkHashDuplicate(submissionId, submission.user_id, receiptHash);
+
+    const oversizeReceipt = receiptImg.bytes.byteLength > MAX_IMAGE_RAW_BYTES;
+    const oversizeSelfie = selfieImg.bytes.byteLength > MAX_IMAGE_RAW_BYTES;
+
+    let extracted: ExtractedSubmission = {
+      receipt: { date: null, total_amount: null, currency: null, merchant_name: null },
+      selfie: { person_visible: false, receipt_visible: false },
+    };
+    let aiError: string | null = null;
+
+    if (!hashDup.found && !oversizeReceipt && !oversizeSelfie) {
+      try {
+        extracted = await extractSubmissionData(receiptImg, selfieImg);
+      } catch (error) {
+        console.warn("Submission extraction failed", error);
+        aiError = (error as Error).message;
       }
+    }
+
+    const receiptDate = extracted.receipt.date;
+    const totalAmount = extracted.receipt.total_amount;
+    const selfie = extracted.selfie;
+
+    // Phase 1: AI only approves or leaves pending — never rejects.
+    // Collect ALL issues so admin sees the full picture in one glance.
+    const issues: string[] = [];
+
+    // Duplicate checks
+    if (hashDup.found) {
+      issues.push(hashDup.reason);
+    }
+
+    // Image size
+    if (oversizeReceipt) issues.push("Receipt image exceeds 5MB size limit");
+    if (oversizeSelfie) issues.push("Selfie image exceeds 5MB size limit");
+
+    // AI extraction failures
+    if (aiError) issues.push(`AI extraction error: ${aiError}`);
+    if (!receiptDate) issues.push("Receipt date not detected");
+    if (totalAmount === null) issues.push("Receipt total not detected");
+    if (!selfie.person_visible) issues.push("No person detected in selfie");
+    if (!selfie.receipt_visible) issues.push("No receipt visible in selfie");
+
+    // 21-day freshness check (only if date was extracted)
+    if (receiptDate && isReceiptTooOld(receiptDate, submission.created_at)) {
+      issues.push(`Receipt date (${receiptDate}) is older than ${RECEIPT_MAX_AGE_DAYS} days from submission`);
+    }
+
+    // Merchant name vs partner store match (only if merchant was extracted)
+    if (extracted.receipt.merchant_name && !merchantNameMatches(extracted.receipt.merchant_name, submission.partner_store_name)) {
+      issues.push(`Merchant name "${extracted.receipt.merchant_name}" does not match selected partner store "${submission.partner_store_name}"`);
+    }
+
+    // Fuzzy duplicate check (only if extraction succeeded)
+    if (receiptDate && totalAmount !== null) {
+      const fuzzyDup = await checkFuzzyDuplicate(submission, receiptDate, totalAmount);
+      if (fuzzyDup.found) {
+        issues.push(fuzzyDup.reason);
+      }
+    }
+
+    let decision: "approved" | "pending" = "pending";
+    let adminNotes: string;
+
+    if (issues.length === 0) {
+      decision = "approved";
+      adminNotes = "Auto-approved: receipt parsed, selfie verified, merchant matches, no duplicates, receipt within 21 days.";
     } else {
-      adminNotes = `AI receipt parsing incomplete: missing ${missingFields.join(", ")}. ${aiError ? `Error: ${aiError}` : ""}`.trim();
+      adminNotes = `AI review flagged ${issues.length} issue(s): ${issues.join("; ")}.`;
     }
 
     const updatePayload: Record<string, unknown> = {
       receipt_hash: receiptHash,
       receipt_date: receiptDate,
       total_amount: totalAmount,
-      currency: extracted.currency,
-      merchant_name: extracted.merchant_name,
+      currency: extracted.receipt.currency,
+      merchant_name: extracted.receipt.merchant_name,
       admin_notes: adminNotes,
+      reviewed_by: AI_REVIEWER_ID,
     };
 
     if (decision !== "pending") {
@@ -355,7 +576,6 @@ Deno.serve(async (req: Request) => {
       submission_id: submissionId,
       decision,
       admin_notes: adminNotes,
-      duplicate_match: duplicateMatch,
       extracted_data: extracted,
       receipt_hash: receiptHash,
     });
@@ -364,4 +584,3 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Internal server error", details: (error as Error).message }, 500);
   }
 });
-
