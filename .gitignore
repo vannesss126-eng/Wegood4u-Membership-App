@@ -9,8 +9,8 @@ web-build/
 expo-env.d.ts
 eas.json
 metro.config.js
-cursor
 ios
+.agent
 
 # native
 *.orig.*
