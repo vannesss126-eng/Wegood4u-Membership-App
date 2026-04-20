@@ -1,41 +1,169 @@
-I'll start by examining the APK file to understand the app's structure and functionality, then help you design an automation solution.Now I have a comprehensive understanding of the app. Let me extract the key route and data structure information.Now I have a comprehensive understanding of the app. Let me synthesize everything into a clear recommendation.Now let me create the comprehensive analysis and automation suggestion.Here's what I found from reverse-engineering the *Wegood4u* APK, and my recommendation for automating proof-of-visit review.
+# AI Submission Review — Feature Specification
 
-## What the app does
+## Overview
 
-*Wegood4u* (v1.1.4) is an Expo/React Native travel rewards app built on *Supabase* (⁠ dimpgwotujtaacoajisn.supabase.co ⁠). Users visit partner stores (cafes, restaurants, bars, experiences), take a *selfie photo* and a *receipt photo, then submit them as proof via the **Tasks tab* (⁠ /(tabs)/tasks.tsx ⁠). An admin reviews submissions and approves or rejects them. Approved visits earn badges across categories (Bronze → Silver → Gold → Platinum tiers).
+Wegood4u is an Expo/React Native travel rewards app on Supabase. Users visit partner stores (cafes, restaurants, bars, experiences), take a **selfie photo** and a **receipt photo**, then submit them as proof of visit via the Tasks tab. An AI reviewer processes each submission automatically using a Supabase Edge Function (`supabase/functions/review-submission/index.ts`) that calls Claude's Vision API.
 
-## Key data structures discovered
+**The AI reviewer can only approve or flag submissions — it never rejects.** Rejections are reserved for Phase 2 after the system has been validated in production.
 
-The app uses a `submissions` table in Supabase with these fields: `receipt_url`, `selfie_url`, `status` (values: `pending`, `approved`, `rejected`), `user_id`, `partner_store_name`, `partner_store_category`, `reviewed_at`, `reviewed_by`, `admin_notes`, `created_at`, `updated_at`, plus new AI review fields such as `receipt_date`, `total_amount`, `currency`, `merchant_name`, and `receipt_hash`. There's also an `isAdminTaskScreen` flag indicating a separate admin review interface, and functions like `useSubmissions`, `useUserSubmissions`, `useSubmissionStats`, `updateSubmissionStatus`, and `pendingSubmissions`.
+---
 
-## Automation design for receipt review agent
+## Architecture
 
-Here's how to build an agent using *Supabase Edge Functions* and an *AI vision model* (like Claude's vision API) to automate the three things you need:
+- **Edge Function:** `review-submission/index.ts` — triggered by a Supabase Database Webhook on `INSERT` into `submissions`.
+- **AI Model:** Claude Sonnet 4.6 via `/v1/messages` with vision (two base64 image content blocks).
+- **Reviewer identity:** Uses admin profile UUID `11b60765-9911-4985-9cbf-0ba4d568303c` (wegood4u@gmail.com) as `reviewed_by`. The `admin_notes` field distinguishes AI decisions from human ones (AI notes always start with "Auto-approved:" or "AI review incomplete:").
+- **Concurrency guard:** Atomic claim (`UPDATE ... WHERE reviewed_by IS NULL`) prevents duplicate processing.
+- **Database columns:** `receipt_date`, `total_amount`, `currency`, `merchant_name`, `receipt_hash`, `admin_notes`, `reviewed_by`, `reviewed_at` on the `submissions` table.
 
-*1. Extract receipt date and total amount* — When a new submission arrives, your Edge Function downloads the receipt image from Supabase Storage, sends it to Claude's vision API with a prompt like: "Extract the transaction date (in ISO format) and total amount (numeric value with currency) from this receipt image. Return JSON only." Parse the structured response to get ⁠ receipt_date ⁠ and ⁠ total_amount ⁠, then write them back to the submissions table.
+---
 
-*2. Detect duplicates* — Generate a perceptual hash (pHash) of each receipt image and store it alongside the submission. Before approving, query existing approved submissions for the same ⁠ user_id ⁠ + ⁠ store_id ⁠ combination, and check whether any previous receipt has a matching hash (within a similarity threshold of ~90%), the same extracted date, or the same total amount. If two or more of these match, flag it as a potential duplicate.
+## Phase 1 — Current (Approve or Pending only)
 
-*3. Auto-approve or flag* — If the OCR extraction succeeds (valid date found, valid amount found), the selfie contains a recognizable person, and no duplicates are detected, automatically update the submission status to ⁠ submission_approved ⁠. Otherwise, flag it as ⁠ pending ⁠ with ⁠ admin_notes ⁠ explaining the reason (e.g., "Duplicate receipt detected — matches submission #X from 2025-03-15").
+**Guiding principle:** During early stage, the AI assists but does not punish. All ambiguous cases go to a human admin. This avoids unfairly flagging users due to image quality issues, slow uploads, or edge cases the AI hasn't been trained on.
 
-## Implementation approach
+### Decision outcomes
 
-Since the app's backend is Supabase, the most natural path is a *Supabase Database Webhook + Edge Function*:
+| Outcome | When | What happens |
+|---------|------|-------------|
+| **Approved** | All checks pass | `status = 'approved'`, `admin_notes` explains why |
+| **Pending** | Any check fails | `status` stays `pending`, `admin_notes` lists what failed, admin reviews manually |
 
-Set up a Postgres trigger on the ⁠ submissions ⁠ table that fires when a new row is inserted with ⁠ status = 'submission_created' ⁠. This invokes your Edge Function, which orchestrates the entire review pipeline: download images from the storage bucket, call Claude API for receipt OCR analysis, compute the image hash, run the duplicate query, and update the row with extracted data and the final verdict.
+**The AI will NEVER set `status = 'rejected'` in Phase 1.**
 
-The Edge Function code would look roughly like this: fetch the receipt image from ⁠ receipt_url ⁠, call the Anthropic API with the image as a base64 document asking for structured JSON output (⁠ {date, total_amount, currency, merchant_name} ⁠), store the extracted fields, check for duplicates against previous submissions using a combination of image hash similarity, date matching, and amount matching, then call ⁠ updateSubmissionStatus ⁠ to either approve or flag.
+### Checks performed
 
-For the review timeline note from the app — "Pending Submissions are typically reviewed within 24-48 hours" — this agent could reduce that to seconds for clear-cut cases, while still routing ambiguous ones to human admins.
+The AI analyzes both the receipt photo and selfie photo in a single Claude Vision call and evaluates these criteria:
 
-====================================================================================================
+#### 1. Receipt data extraction
+Claude extracts from the receipt image:
+- `receipt_date` — transaction date (YYYY-MM-DD)
+- `total_amount` — grand total paid (numeric)
+- `currency` — currency code if visible (e.g. MYR, RM)
+- `merchant_name` — store/merchant name as printed
 
-Let me build the complete Edge Function implementation for your Wegood4u receipt review automation.Here are the three files you need:
+If any of `receipt_date` or `total_amount` cannot be read → **pending** with note listing which fields are missing (e.g. "missing receipt date, receipt total").
 
-*⁠ index.ts ⁠* — The Edge Function that does all the work. When a new submission hits the ⁠ submissions ⁠ table, it downloads the receipt image, sends it to Claude Vision for structured extraction (date, total, currency, merchant), computes a SHA-256 hash for duplicate detection, queries previous submissions for the same user+store, and writes back the decision.
+#### 2. Receipt date freshness
+The receipt date must be within **21 days** of the submission date (`created_at`). If the receipt is older than 21 days → **pending** with note "Receipt date is older than 21 days from submission."
 
-*⁠ 001_add_receipt_review_columns.sql ⁠* — Run this in your Supabase SQL Editor first. It adds the ⁠ receipt_date ⁠, ⁠ total_amount ⁠, ⁠ currency ⁠, ⁠ merchant_name ⁠, and ⁠ receipt_hash ⁠ columns, creates indexes for fast duplicate lookups, and includes a helper view for your admin dashboard.
+#### 3. Selfie validation
+Claude checks the selfie image for:
+- `person_visible` — a clearly recognizable human face is present
+- `receipt_visible` — a physical paper receipt is also visible in the selfie (held in frame)
 
-*⁠ README.md ⁠* — Step-by-step deployment guide covering environment secrets, the database webhook setup, and a cURL test command.
+If either check fails → **pending** with note listing what's missing (e.g. "missing person in selfie, receipt visible in selfie").
 
-To get this running: run the SQL migration, add your ⁠ ANTHROPIC_API_KEY ⁠ to Edge Function secrets, deploy with ⁠ supabase functions deploy review-submission --no-verify-jwt ⁠, then create the database webhook in the Supabase dashboard pointing INSERT events on ⁠ submissions ⁠ to the function. The estimated cost is roughly RM 0.01–0.04 per receipt at current Claude Sonnet pricing.
+#### 4. Merchant name vs partner store
+The `merchant_name` extracted from the receipt is compared against the `partner_store_name` the user selected when submitting. If the names don't match (fuzzy comparison) → **pending** with note "Merchant name on receipt does not match selected partner store."
+
+This catches cases where a user submits a receipt from a different store than the one they selected.
+
+#### 5. Duplicate detection
+Two layers of duplicate detection run against all existing `approved` and `pending` submissions for the same user:
+
+- **Exact image match:** SHA-256 hash of the receipt image bytes. If an identical image was already submitted → **pending** with note referencing the prior submission ID.
+- **Fuzzy match:** Same `partner_store_name` + same `receipt_date` + same `total_amount` (within RM 0.05 tolerance). If matched → **pending** with note.
+
+#### 6. Image size guard
+Each image must be under ~3.5MB raw (Claude Vision's 5MB base64 limit). If oversized → **pending** with note "Image exceeds size limit, manual review required."
+
+### Auto-approve criteria (ALL must pass)
+
+A submission is auto-approved only when **every** check passes:
+- Receipt date extracted successfully
+- Total amount extracted successfully
+- Receipt date is within 21 days of submission
+- Person visible in selfie
+- Receipt visible in selfie
+- Merchant name matches partner store (or close enough)
+- No duplicate detected
+- Images within size limits
+
+If **any** check fails, the submission stays `pending` with detailed `admin_notes` for the human admin.
+
+---
+
+## Phase 2 — Future (Approve, Pending, or Reject)
+
+Phase 2 promotes certain `pending` cases to `rejected` once the system has proven reliable in production.
+
+### Changes from Phase 1
+
+| Check | Phase 1 outcome | Phase 2 outcome |
+|-------|-----------------|-----------------|
+| Exact duplicate image (SHA-256 match) | Pending | **Rejected** |
+| Fuzzy duplicate (same store + date + amount) | Pending | **Rejected** |
+| Blurry / unreadable receipt (all fields null) | Pending | **Rejected** |
+| Receipt date older than 21 days | Pending | **Rejected** |
+| Selfie missing person or receipt | Pending | Pending (still needs human judgment) |
+| Merchant name mismatch | Pending | Pending (still needs human judgment) |
+| Image oversized | Pending | Pending |
+
+### Rejection notes
+
+When rejecting in Phase 2, `admin_notes` will include a clear reason so the user (or admin) understands:
+- "Duplicate receipt — matches submission #X"
+- "Receipt is unreadable — no date or total could be extracted"
+- "Receipt is too old — dated more than 21 days before submission"
+
+---
+
+## Key data structures
+
+### Submissions table fields (AI-related)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `receipt_date` | date | Transaction date extracted via OCR |
+| `total_amount` | numeric(12,2) | Total amount extracted via OCR |
+| `currency` | text | Currency code from receipt, NULL if unreadable |
+| `merchant_name` | text | Merchant name extracted from receipt |
+| `receipt_hash` | text | SHA-256 hash of receipt image bytes |
+| `admin_notes` | text | AI or admin review notes |
+| `reviewed_by` | uuid | Profile ID — AI uses admin UUID, humans use their own |
+| `reviewed_at` | timestamptz | When the review decision was made |
+
+### Partner stores
+
+Users select from a pre-existing catalog of partner stores when submitting. The selected store's `name` is saved as `partner_store_name` on the submission. The AI compares this against the `merchant_name` it extracts from the receipt.
+
+---
+
+## Edge Function implementation
+
+**File:** `supabase/functions/review-submission/index.ts`
+
+### Flow
+
+1. Parse `submission_id` from webhook payload
+2. Fetch submission row from Postgres
+3. Early-exit if status is not `pending`
+4. Atomic claim: `UPDATE ... SET reviewed_by = AI_REVIEWER_ID WHERE reviewed_by IS NULL`
+5. Fetch receipt + selfie images in parallel (with media type detection)
+6. Compute SHA-256 hash of receipt image
+7. Run hash-based duplicate check (unconditional — catches exact dupes even if OCR fails)
+8. Check image sizes
+9. Call Claude Vision with both images as base64 content blocks
+10. Extract receipt fields + selfie validation from Claude's JSON response
+11. Check receipt date freshness (21-day rule)
+12. Check merchant name vs partner store name
+13. Run fuzzy duplicate check (if extraction succeeded)
+14. Decide: approved or pending
+15. Write results back to submissions table
+
+### Environment variables
+
+- `SUPABASE_URL` — Supabase project URL
+- `SERVICE_ROLE_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — bypasses RLS
+- `ANTHROPIC_API_KEY` — Claude API key
+
+### Deployment
+
+```bash
+supabase functions deploy review-submission --no-verify-jwt
+```
+
+### Estimated cost
+
+~RM 0.10-0.15 per submission at Claude Sonnet 4.6 pricing (two images + short prompt + JSON response). Can be reduced by switching to `claude-haiku-4-5` if accuracy is sufficient.
