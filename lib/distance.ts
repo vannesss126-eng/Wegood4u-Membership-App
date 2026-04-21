@@ -38,6 +38,9 @@ export function formatDistanceM(distanceM: number): string {
   }
 
   const distanceKm = Math.floor(distanceM / 1000);
+  if (distanceKm > 99) {
+    return '+99km';
+  }
   return `+${distanceKm}km`;
 }
 
