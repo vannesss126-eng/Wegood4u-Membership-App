@@ -10,7 +10,6 @@ expo-env.d.ts
 eas.json
 metro.config.js
 ios
-.agent
 
 # native
 *.orig.*
