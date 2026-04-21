@@ -289,6 +289,13 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
                   </View>
                 ) : null}
 
+                {submission.admin_notes ? (
+                  <View style={styles.adminNotesBox}>
+                    <Text style={styles.adminNotesLabel}>AI Review Notes</Text>
+                    <Text style={styles.adminNotesText}>{submission.admin_notes}</Text>
+                  </View>
+                ) : null}
+
                 {/* Images */}
                 <View style={styles.imagesSection}>
                   <Text style={styles.sectionTitle}>Submitted Photos</Text>
@@ -587,6 +594,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'right',
+  },
+  adminNotesBox: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  adminNotesLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  adminNotesText: {
+    fontSize: 13,
+    color: '#78350F',
+    lineHeight: 18,
   },
   imagesSection: {
     marginBottom: 20,
