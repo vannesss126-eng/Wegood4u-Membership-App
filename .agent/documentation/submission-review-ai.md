@@ -10,7 +10,8 @@ Wegood4u is an Expo/React Native travel rewards app on Supabase. Users visit par
 
 ## Architecture
 
-- **Edge Function:** `review-submission/index.ts` — triggered by a Supabase Database Webhook on `INSERT` into `submissions`.
+- **Edge Function:** `review-submission/index.ts` — auto-invoked on every new pending submission (see Trigger below).
+- **Trigger:** `supabase/migrations/20260420120000_ai_review_trigger.sql` installs an `AFTER INSERT` Postgres trigger on `public.submissions` that fires only when `NEW.status = 'pending'`. It uses `pg_net.http_post` to send an async `POST` to the Edge Function URL with `{ submission_id: NEW.id }`. The async call ensures the user's INSERT is never blocked on the Anthropic API, and any webhook-delivery failure is swallowed as a warning so the submission still succeeds.
 - **AI Model:** Claude Sonnet 4.6 via `/v1/messages` with vision (two base64 image content blocks).
 - **Reviewer identity:** Uses admin profile UUID `11b60765-9911-4985-9cbf-0ba4d568303c` (wegood4u@gmail.com) as `reviewed_by`. The `admin_notes` field distinguishes AI decisions from human ones (AI notes always start with "Auto-approved:" or "AI review incomplete:").
 - **Concurrency guard:** Atomic claim (`UPDATE ... WHERE reviewed_by IS NULL`) prevents duplicate processing.
@@ -136,7 +137,7 @@ Users select from a pre-existing catalog of partner stores when submitting. The 
 
 ### Flow
 
-1. Parse `submission_id` from webhook payload
+1. Parse `submission_id` from the trigger's POST body (`{ submission_id }`)
 2. Fetch submission row from Postgres
 3. Early-exit if status is not `pending`
 4. Atomic claim: `UPDATE ... SET reviewed_by = AI_REVIEWER_ID WHERE reviewed_by IS NULL`
