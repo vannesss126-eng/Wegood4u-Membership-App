@@ -581,19 +581,24 @@ const styles = StyleSheet.create({
   reviewRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 8,
+    gap: 12,
   },
   reviewLabel: {
     color: '#334155',
     fontSize: 13,
     fontWeight: '600',
+    flexShrink: 0,
   },
   reviewValue: {
     color: '#0F172A',
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'right',
+    flex: 1,
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
   adminNotesBox: {
     backgroundColor: '#FEF3C7',
