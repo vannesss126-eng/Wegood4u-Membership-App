@@ -143,8 +143,11 @@ Users can't opt out of any notification type. There's no preferences table or UI
 The hook refetches on mount only. Long sessions on the Notifications screen won't see new arrivals until the user pulls to refresh or remounts. Could be solved with a Supabase Realtime subscription on `notifications WHERE recipient_id = auth.uid()`.
 
 ### Limited notification vocabulary
-Only three actions exist (`submission_created`, `submission_approved`, `submission_rejected`). Future product likely needs:
-- Badge unlocked
-- Referral qualified
-- Hotel voucher claimable
+Only three actions exist (`submission_created`, `submission_approved`, `submission_rejected`). The credits/task model locked on 2026-04-23 ([`credits-overview.md`](credits-overview.md), [`badge-rewards.md`](badge-rewards.md)) expands this significantly. Future needs:
+- **Badge earned** (e.g. "You reached Silver") — currently silent (see "Badges are silent" above).
+- **Task completed** — a cycle reaching 10 credits mints a voucher; user should know.
+- **Referral qualified** — 1+1 at Level 1, half-credit accumulation at Level 2. Show the gold-tick landing: "Bonus 1 Credit for Restaurant."
+- **Voucher claimable / redeemed** — pairs with the Rewards subtab.
+
+The History page on the Tasks tab (per [`credits-overview.md`](credits-overview.md) "History feed — event types") will render the same event vocabulary from a separate feed query; the notifications system should share the event taxonomy so both surfaces stay in sync.
 - Account-level events (password change confirmation, deletion grace period if added, etc.)

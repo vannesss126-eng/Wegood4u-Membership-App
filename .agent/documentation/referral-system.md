@@ -1,5 +1,7 @@
 ![alt text](image.png)# Referral System — Two-Level Tree + Qualification Rules
-> Context doc for the Invite Friends / Referrals feature. Pair with `architecture-brief.md`.
+> Context doc for the Invite Friends / Referrals feature. Pair with [`architecture-brief.md`](architecture-brief.md), [`credits-overview.md`](credits-overview.md), and [`badge-rewards.md`](badge-rewards.md).
+>
+> **Scope note:** this doc owns the *tree + qualification* logic. The *credit award mechanic* (auto-placement, +1 numerator, 4-tick cap, Level 2 half-credit accumulator) is defined in [`credits-overview.md`](credits-overview.md) and supersedes anything older in this file.
 
 ---
 
@@ -54,12 +56,14 @@ A referral row in the tree has one of three visible states, driven by the invite
 ### 2. Credit reward — the "1+1" rule
 When an invitee transitions to the **Active (qualified)** state for the first time:
 
-- **+1 credit** to the invitee (the person who just qualified)
-- **+1 credit** to their direct inviter (Level 1 relationship only)
+- **+1 credit** to the invitee (applied to their own nearest-complete R/C/B task, per [`credits-overview.md`](credits-overview.md) auto-placement rules).
+- **+1 credit** to their direct inviter (Level 1 relationship, same auto-placement rules).
 
-Level 2 relationships do **not** award credits to the top-level affiliate at this stage. Level 2 is display-only.
+**Level 2 is no longer display-only** (updated 2026-04-22). When a Level 2 invitee qualifies, the top-level affiliate accumulates +0.5 credit; every pair of Level 2 qualifications settles as +1 auto-placed credit. Full mechanic in [`credits-overview.md`](credits-overview.md).
 
 Award fires **once per invitee**, on the first approved submission after verification. Subsequent approvals do not grant additional referral credits.
+
+Visual manifestation: a referral credit is never shown as "balance +1." It appears on the recipient's My Tasks tracker as a **gold tick** on the progress bar of the auto-placed category, with `(+N)` beside the approved count. See [`credits-overview.md`](credits-overview.md) "Referral auto-placement rules."
 
 ### 3. The "within 1 hour" reward note
 Product copy referenced a "reward credit of visit within 1 hour" tied to the invitee's first submission. Treat this as a UX timing hint for the invitee's own experience (show the credit landing quickly after approval), **not** as a hard expiry window on the referral reward itself. Clarify with product before enforcing a 1-hour cutoff in the database logic.
@@ -71,32 +75,36 @@ Product copy referenced a "reward credit of visit within 1 hour" tied to the inv
 
 ---
 
-## Credits (placeholder — full spec pending)
-Credits are a new concept. For now, document only what the referral flow needs:
+## Credits (full spec now in [`credits-overview.md`](credits-overview.md))
+Credits are the app's single progress unit (replacing the earlier "points" concept). The full economy — earning rules, auto-placement algorithm, per-category caps, badge tiers, voucher rewards — is locked in [`credits-overview.md`](credits-overview.md) as of 2026-04-23.
 
-- Unit: integer "credit" (1 credit per qualifying referral event)
-- Two award events per qualifying referral: one to invitee, one to inviter
-- No expiry assumed
-- Redemption rules, balance UI, and the broader credit economy are **out of scope for this doc** — the user will define these separately
+What this doc contributes to the credit system:
+- The qualification gate (Verified + first approved submission) that triggers a credit event.
+- The 1+1 split at Level 1 (invitee + inviter).
+- The 0.5 + 0.5 = 1 split at Level 2 (top-level affiliate accumulator).
 
-When implementing, stub a `credits_ledger` table (user_id, delta, reason, source_submission_id, created_at) so every credit movement is auditable. Do not mutate a running balance in place — derive balance from the ledger.
+Everything after the credit event — auto-placement, ledger shape, cycle mechanics, voucher minting — lives in [`credits-overview.md`](credits-overview.md).
 
 ---
 
 ## Implementation checklist (when the user is ready to build)
-1. Add `credits_ledger` table + RLS so users can only read their own rows.
-2. Add a `first_approved_submission_at` column on `profiles` (nullable timestamp) — set once via trigger when a user's first submission reaches `approved`.
-3. Trigger/edge function on that transition:
-   - Insert `+1` ledger row for the invitee (reason: `first_approved_submission`)
-   - If `profiles.inviter_id` is not null, insert `+1` ledger row for the inviter (reason: `referral_qualified`, `source_submission_id = <id>`)
-4. Extend the `referral_tree` view (or the `useReferrals` hook query) to join `verification_completed` and `first_approved_submission_at` so the UI can render the three dot states.
-5. Update [components/invite-friends/referrals.tsx:231-237](components/invite-friends/referrals.tsx#L231-L237) so `greenCircle` style becomes conditional: hollow / gray / green.
-6. Hide names (or show a "Pending" placeholder) for invitees still in the "Registered only" state.
+1. Add `credits_ledger` table + RLS so users can only read their own rows. Schema per [`credits-overview.md`](credits-overview.md) "Implementation notes" — `(user_id, category, delta_numerator, reason, source_submission_id, source_referral_id, cycle_id, created_at)`.
+2. Add `referral_half_credit_accumulator(user_id, count)` for Level 2 pairing.
+3. Add a `first_approved_submission_at` column on `profiles` (nullable timestamp) — set once via trigger when a user's first submission reaches `approved`.
+4. Trigger/edge function on that transition:
+   - Run the auto-placement algorithm (nearest-complete R/C/B category, tie-break Restaurant → Cafe → Bar, skip if that category has already hit 4 gold ticks this cycle).
+   - Insert `+1` ledger row for the invitee with `reason = 'approved_submission'` *plus* their own referral credit on the chosen category.
+   - If `profiles.inviter_id` is not null (Level 1), insert `+1` ledger row for the inviter with `reason = 'level1_referral'`, `source_referral_id = <invitee_id>`.
+   - If the inviter's own inviter (Level 2 → top-level affiliate) exists, increment that user's half-credit accumulator by 1. If the accumulator is now even, insert `+1` ledger row with `reason = 'level2_pair'` and decrement the accumulator by 2.
+5. Extend the `referral_tree` view (or the `useReferrals` hook query) to join `verification_completed` and `first_approved_submission_at` so the UI can render the three dot states.
+6. Update [components/invite-friends/referrals.tsx:231-237](components/invite-friends/referrals.tsx#L231-L237) so `greenCircle` style becomes conditional: hollow / gray / green.
+7. Hide names (or show a "Pending" placeholder) for invitees still in the "Registered only" state.
+8. Surface a "Bonus 1 Credit for {category}" toast/banner on the Referrals page when a qualifying event awards the user a credit.
 
 ---
 
 ## Open questions to resolve with product
-- Do Level 2 qualified referrals award anything to the top-level affiliate (e.g. 0.5 credits, or a separate bonus)?
+- ~~Do Level 2 qualified referrals award anything to the top-level affiliate?~~ **Resolved 2026-04-22:** yes, +0.5 per qualified Level 2 invitee, settled as +1 credit per pair. Full mechanic in [`credits-overview.md`](credits-overview.md).
 - Claw-back policy if an approved submission is later rejected.
 - Does the "within 1 hour" copy reflect a real business rule, or is it just UX framing?
-- Is there a cap on referral credits per affiliate per day / month?
+- Is there a cap on referral credits per affiliate per day / month? (Per-category per-cycle cap is 4 gold ticks — see [`credits-overview.md`](credits-overview.md) — but that's a per-cycle mechanic, not a per-affiliate rate limit.)

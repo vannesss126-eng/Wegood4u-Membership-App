@@ -39,16 +39,28 @@ Members can log "visits" to partner establishments (Cafe, Restaurant, Bar, Hotel
 *   **Review Queue:** Submissions stay `pending` until an `admin` approves or rejects them. 
 
 ### 2.3 Gamification & Badge System
-When an admin approves a submission, a Postgres trigger automatically calculates experience and awards badges if thresholds are met.
+The app is mid-transition from a submission-count model to a credits/tasks model. Both are documented here honestly so devs know the difference.
+
+**Current code (source of truth: [`badges.md`](badges.md)):**
 *   **Categories:** Bar Explorer, Coffee Lover, Foodie, Hotel Explorer.
 *   **Tiers & Ranks:** Bronze, Silver, Gold, Platinum (Ranks 1 to 3 in each).
-*   **Scaling:** Thresholds range deeply from 5 visits (Bronze 1) to 120 visits (Platinum 3) per category.
-*   **Asset Storage:** Badge image URLs are constructed dynamically pulling from the Supabase Storage public bucket.
+*   **Scaling:** Thresholds 5 (Bronze 1) to 120 (Platinum 3) per-category approved submissions.
+*   **Asset Storage:** Badge image URLs pulled dynamically from the Supabase Storage public bucket.
+*   Known issue: Bar and Hotel badges are currently unreachable (schema enum gap).
+
+**Target model (source of truth: [`credits-overview.md`](credits-overview.md), [`badge-rewards.md`](badge-rewards.md), locked 2026-04-23, **not yet implemented**):**
+*   **Eligible categories:** Restaurant, Cafe, Bar earn credits. Hotel shown as visibility counter only. Experience off-system.
+*   **Progress unit:** 10 credits per cycle = 1 task. Tasks are unlimited — each completion starts a new cycle.
+*   **Tiers:** Bronze (default) / Silver (5 tasks) / Gold (15 tasks) / Platinum (35+ tasks), cumulative across R/C/B.
+*   **Rewards per tier:** Bronze = Airbnb, Silver = 3★, Gold = 4★, Platinum = specialty/5★/resort voucher.
+*   **Referral effect:** qualifying referral = +1 numerator on recipient's nearest-complete task (gold tick on 0/2/4/6/8/10 progress bar), max 4 per category per cycle.
 
 ### 2.4 Affiliate & Referral System
-Tracks relationships via an `inviter_id` field in the user profile.
-*   Affiliates can distribute unique generated codes. 
-*   The system actively records direct (Level 1) and indirect (Level 2) referrals via recursive SQL Views (`referral_tree`).
+Tracks relationships via an `inviter_id` field in the user profile. Full rules in [`referral-system.md`](referral-system.md).
+*   Affiliates can distribute unique generated codes.
+*   The system records direct (Level 1) and indirect (Level 2) referrals via recursive SQL Views (`referral_tree`).
+*   Qualifying event = invitee verified **and** first submission approved. Triggers the 1+1 credit split (invitee + direct inviter) per [`credits-overview.md`](credits-overview.md) auto-placement rules.
+*   Level 2 qualifications contribute +0.5 to the top-level affiliate; every pair settles as +1 credit (also auto-placed).
 
 ---
 
@@ -91,4 +103,4 @@ While Supabase manages structured relational user data, **Firebase** is leverage
 
 ---
 
-*(Last Updated: 2026-04-07 based on the addition of days, priceRange, and menu-images to partner-store)*
+*(Last Updated: 2026-04-23 — synced sections 2.3 and 2.4 with the locked credits/task model in [`credits-overview.md`](credits-overview.md) and [`badge-rewards.md`](badge-rewards.md).)*

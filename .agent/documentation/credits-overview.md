@@ -1,7 +1,7 @@
 # Credits System — Overview & Rules
 
-> Source: product discussion with Kasey Fong on 2026-04-21 and 2026-04-22 (WhatsApp).
-> Pair with [`referral-system.md`](referral-system.md) and [`architecture-brief.md`](architecture-brief.md).
+> Source: product discussion with Kasey Fong on 2026-04-21, 2026-04-22, and 2026-04-23 (WhatsApp).
+> Pair with [`referral-system.md`](referral-system.md), [`badge-rewards.md`](badge-rewards.md), and [`architecture-brief.md`](architecture-brief.md).
 
 ---
 
@@ -25,11 +25,15 @@ N tasks                      →  badge tier (see below)
 
 ## Eligible categories
 
-Only **Restaurant, Cafe, Bar** participate in the credits/task system. Each of these has its own per-category task counter (e.g. `Bar Bronze Exploration · 5 of 10`).
+Only **Restaurant, Cafe, Bar** participate in the credits/task system — they earn credits from approved submissions and receive referral auto-placements. Each has its own per-category task counter (e.g. `Bar Bronze Exploration · 5 of 10`).
 
-**Hotel** and **Experience** do **not** earn credits and do **not** have task counters. They follow a separate "bigger claims" reward path that hasn't been specified yet.
+**Hotel** still appears on the My Tasks tracker with a simple approved-submission counter (for visibility/engagement), but Hotel submissions do **not** earn credits, and referral credits never auto-place on Hotel. Hotel is excluded from badge tier task counts.
+
+**Experience** does not appear in the credits/task system. It follows the separate "bigger claims" reward path that hasn't been specified yet.
 
 > "restaurant cafe and bar only" … "hotel and experience will fall into other categories" … "hotel will reward bigger claims" — Kasey, 2026-04-22
+>
+> Hotel shown-but-excluded on My Tasks confirmed 2026-04-23.
 
 ---
 
@@ -38,9 +42,10 @@ Only **Restaurant, Cafe, Bar** participate in the credits/task system. Each of t
 | Event | Credit delta | Where it applies |
 |---|---|---|
 | Approved submission in Restaurant / Cafe / Bar | +1 | Numerator of that same category's task (e.g. cafe `4/10` → `5/10`) |
-| Level 1 referral qualifies | +1 to inviter | **Auto-placed** on the inviter's nearest-complete category task — manifests as the denominator dropping by 1 (e.g. bar `5/10` → `5/9`). Also +1 to the invitee per [`referral-system.md`](referral-system.md). |
-| Level 2 referral qualifies | +0.5 to top-level affiliate | Accumulates. Every **2** qualified Level 2 events = 1 full credit, then auto-placed using the same nearest-complete rule. |
-| Approved submission in Hotel / Experience | 0 | These don't earn credits — they're on the separate "bigger claims" track. |
+| Level 1 referral qualifies | +1 to inviter | **Auto-placed** on the inviter's nearest-complete category task as **+1 numerator** (e.g. bar `5/10` → `6/10`). Displayed on the progress bar as a **gold-coloured tick**, and beside the approved count as `(+1)`. Also +1 to the invitee per [`referral-system.md`](referral-system.md). |
+| Level 2 referral qualifies | +0.5 to top-level affiliate | Accumulates. Every **2** qualified Level 2 events = 1 full credit, then auto-placed using the same nearest-complete rule (again as +1 numerator / gold tick). |
+| Approved submission in Hotel | +1 on Hotel's visibility counter only | No credit toward task completion, no referral bonus, no badge tier contribution. Shown on My Tasks for engagement. |
+| Approved submission in Experience | 0 | Experience is on the separate "bigger claims" track and not surfaced in My Tasks. |
 
 Qualification (for both Level 1 and Level 2) = invitee is verified **and** has at least one approved submission, per [`referral-system.md`](referral-system.md).
 
@@ -59,14 +64,25 @@ This supersedes the "Level 2 is display-only" line in [`referral-system.md`](ref
 
 ## Referral auto-placement rules
 
-When a referral credit is awarded (Level 1, or a completed Level 2 pair), the system **automatically** applies it to one of the user's eligible-category tasks. Users do **not** choose where the credit lands.
+When a referral credit is awarded (Level 1, or a completed Level 2 pair), the system **automatically** applies it to one of the user's eligible-category tasks as a **+1 numerator increment** (gold tick). Users do **not** choose where the credit lands.
 
 > "cannot assign . it will make our progress heavy" — Kasey, 2026-04-22 (rejecting the idea of letting users assign credits to a chosen category)
 
+### Why +1 numerator, not −1 denominator (decided 2026-04-23)
+
+Originally the referral bonus was modelled as a **denominator decrement** (e.g. `5/10` → `5/9`). This created two UI problems:
+1. The tick-mark scale becomes irregular (`0, 2, 4, 6, 8, 9`), confusing to read.
+2. Task completion could fire at different totals (9 vs 10) depending on referral history.
+
+Switched to **+1 numerator increment**: the denominator is always `10`, the tick-mark scale stays `0, 2, 4, 6, 8, 10`, and referral bonuses appear as gold ticks filling the bar faster. Task completes cleanly at numerator == 10.
+
+> "so if its +1, we dont need to update the track progress UI, just immediately add one" — user, 2026-04-23
+> "Thats why Im thinking +1 would be better then -1 sir" — Kasey, 2026-04-23
+
 ### Placement algorithm
 1. Look at the user's three eligible-category tasks (Restaurant, Cafe, Bar).
-2. Pick the one **nearest to completion** (highest `numerator / current_denominator` ratio).
-3. Decrement that category's denominator by 1.
+2. Pick the one **nearest to completion** (highest `numerator / 10` ratio).
+3. Add a `+1` row to that category's ledger with `reason ∈ {level1_referral, level2_pair}`.
 
 #### Worked example (from chat)
 User has three ongoing tasks:
@@ -77,17 +93,20 @@ User has three ongoing tasks:
 | Bar | 5/10 ← closest |
 | Restaurant | 1/10 |
 
-A referral qualifies → bar becomes `5/9`.
+A referral qualifies → bar becomes `6/10`, displayed as `5 (+1) / 10` with a gold tick on the progress bar at position 6.
 
 ### Tie-break order
 When multiple categories share the same closest-to-complete ratio: **Restaurant → Cafe → Bar**.
 
 ### Per-category cap (per cycle)
 > "Each categories must only max reduce to 6" … "Means each categories can claim 4 only" … "Per cycle of task of each categories" — Kasey
+>
+> "so the maximum add is 4 gold line ya" — Kasey, 2026-04-23
 
-- Each category's denominator can drop **at most 4 times per cycle** (10 → 9 → 8 → 7 → 6, floor at 6).
-- Once a category task completes, a new cycle begins with the denominator reset to 10.
-- If the nearest-complete category has already hit its 4-reduction cap for this cycle, fall through to the next-closest eligible category by the same tie-break rule.
+- Each category can receive **at most 4 referral +1 increments per cycle** (i.e. up to 4 gold ticks on the progress bar).
+- At most 4 of the 10 credits needed to complete a cycle can come from referrals; the remaining ≥6 must come from approved submissions.
+- Once a category task completes (numerator reaches 10), a new cycle begins with numerator reset to 0 and the gold-tick counter reset.
+- If the nearest-complete category has already received its 4 gold ticks for this cycle, fall through to the next-closest eligible category by the same tie-break rule.
 
 ### Per-invitee constraint
 > "This is for 1st time only ya." … "Means every submission of new user on new successfully approval" — Kasey
@@ -104,12 +123,24 @@ Each invitee triggers **exactly one** referral credit for their inviter — on t
 
 ### Badge tiers (cumulative tasks across all eligible categories)
 
-| Tier | Tasks required |
-|---|---|
-| Bronze | default (no tasks required) |
-| Silver | 5 tasks |
-| Gold | 15 tasks |
-| Platinum | 25 tasks |
+Thresholds per Kasey, 2026-04-23 WhatsApp (**supersedes the earlier 5/15/25 figure**):
+
+| Tier | Tasks required | Reward category |
+|---|---|---|
+| Bronze | default (0–4 tasks) | Airbnb voucher |
+| Silver | 5 tasks | 3-star hotel voucher |
+| Gold | 15 tasks | 4-star hotel voucher |
+| Platinum | 35+ tasks | Specialty hotel / 5-star / resort voucher |
+
+Full reward mapping lives in [`badge-rewards.md`](badge-rewards.md).
+
+"Tasks" = completed cycles across Restaurant + Cafe + Bar combined. Hotel tasks do **not** contribute to badge tier.
+
+> "1-5 is Bronze / 5-15 is Silver / 15-35 is Gold / 35p onwards is Platinum" — Kasey
+> "5 task completion = 50 successfull approval = level up to Silver" — Kasey
+> "if user completed 4 task = 40 shop, he start a new task, he still in bronze" — Kasey
+
+**Sub-levels (Level 1/2/3 within a tier)** — the Figma shows rank/level markers within each tier. Kasey has not specified the thresholds that promote a user from Level 1 → 2 → 3 within a tier, nor whether the level is global or per-category. Tracked in "Still open" below.
 
 ### Hotel "bigger claims" track — TBD
 Hotel (and possibly Experience) don't feed the credits/task loop. Kasey said hotels "reward bigger claims" but didn't specify the mechanism. **Confirm with Kasey before designing this.**
@@ -120,18 +151,37 @@ Hotel (and possibly Experience) don't feed the credits/task loop. Kasey said hot
 
 | Screen | What to show |
 |---|---|
-| **Tasks tab → Rewards subtab** | Primary home for credit balance and voucher redemption. The current "Coming Soon" hotel-voucher card becomes claimable once the user has ≥1 completed task. |
-| **Tasks tab → Badges subtab, top section** | "Ongoing Task" status bar above "Your Badges". Show all eligible categories' progress (e.g. `Bar Bronze Exploration · 5/9`). Category label lives here. |
+| **Tasks tab → My Tasks subtab** | Primary progress surface. Top section: per-category `(numerator / 10)` progress bars for Restaurant, Cafe, Bar (credit-earning) + Hotel (visibility-only). Gold ticks on the progress bar represent referral +1s. Middle section: latest-earned badge card with `→` to full badge page. Bottom section: last 5 history entries with `View All` to full history page. |
+| **Tasks tab → Submit subtab** | Verified-member submit form (Date Visit → Partner Store → Receipt → Selfie → Submit). Replaces the alert with a dedicated "Proof Submitted" screen. |
+| **Tasks tab → Rewards subtab** | Primary home for voucher redemption. Claimable once the user has ≥1 completed task. Design not yet produced — current in-app Rewards page stays as placeholder. |
+| **Badge detail page** (routed from My Tasks badge card `→`) | 4 category sections (R/C/Bar/Hotel), each a horizontal list of tier/level badges. Per-category share CTA launches a Badge Collection share card. |
 | **Profile tab** | **Do NOT show credits here** — Kasey explicitly rejected putting credits in profile. |
 
 ### Ongoing-task status bar — example
 ```
 Ongoing Task
-Bar Bronze Exploration   5/9
-Cafe Bronze Exploration  4/10
-Restaurant Bronze        1/10
+Bar Bronze Exploration   5 (+1) / 10    ← 1 gold tick on progress bar
+Cafe Bronze Exploration  4 / 10
+Restaurant Bronze        1 / 10
+Hotel                    3 / 10         ← counter only, no credits / no referrals
 ```
-The reduced denominators (e.g. `5/9` instead of `5/10`) reflect referral credits already auto-placed.
+The `(+N)` annotation and gold ticks reflect referral credits auto-placed on that category. Submission count and referral count are surfaced separately so users can see *why* progress moved without them submitting anything.
+
+### History feed — event types
+
+Per Kasey, 2026-04-23, the History page must cover more than approved submissions:
+
+| Event | Example row |
+|---|---|
+| Approved submission | `{date} • {partner_store} • Approved` |
+| Badge earned | `{date} • Earned Silver Level 1` |
+| Task completed | `{date} • Bar Bronze Exploration completed • +1 voucher` |
+| Reward redeemed | `{date} • Redeemed 3-star hotel voucher` |
+
+> "History not only approved submission but also badge updates, track progress complete, and reward used" — user, 2026-04-23
+> "Yes" — Kasey, 2026-04-23
+
+The latest 5 events surface on the My Tasks subtab; the full paginated feed lives on the standalone History page.
 
 ---
 
@@ -139,33 +189,38 @@ The reduced denominators (e.g. `5/9` instead of `5/10`) reflect referral credits
 
 | # | Question | Answer |
 |---|---|---|
-| 1 | Does referral give a credit, or reduce task minimum? | **Both — they're the same thing.** A referral credit manifests as a -1 to the nearest-complete category task's denominator. |
+| 1 | Does referral give a credit, or reduce task minimum? | **Credit.** A referral manifests as **+1 numerator** on the nearest-complete category task (denominator stays fixed at 10). Displayed as a gold tick on the progress bar. Switched from −1 denominator on 2026-04-23 to keep the tick scale at `0, 2, 4, 6, 8, 10`. |
 | 2 | Level 2 fractional handling | Accumulate 0.5 events; every pair = 1 full credit. Even count required. |
-| 3 | Per-category vs global tasks | **Per-category.** Three concurrent tasks (Restaurant, Cafe, Bar). Denominator default 10. |
+| 3 | Per-category vs global tasks | **Per-category.** Three concurrent credit-earning tasks (Restaurant, Cafe, Bar) plus Hotel as a visibility-only counter. Denominator fixed at 10. |
 | 4 | Fractional credits in storage | **Store as integers.** Level 2 0.5s live in a small accumulator (or a `pending_half_credits` counter); only commit to the ledger as integer +1 when the pair completes. |
 | 5 | Voucher caps / expiry | Skipped — no vouchers are wired up yet. Revisit when redemption is built. |
+| 6 | Badge tier thresholds | **5 / 15 / 35** tasks for Silver / Gold / Platinum (updated 2026-04-23 from 5/15/25). Bronze is default. |
+| 7 | Hotel on My Tasks | Shown with approved-submission counter; does not earn credits, is not a referral auto-placement target, does not contribute to badge tier. |
 
 ---
 
 ## Still open
 
-- **Hotel "bigger claims" mechanic** — completely undefined. What does a hotel visit reward, and how is it shown?
+- **Badge sub-level thresholds (Level 1/2/3 within a tier)** — Figma shows level markers within each tier. Kasey has not specified what promotes a user from L1 → L2 → L3, nor whether it's per-category or global. **Resolution needed before badge UI implementation.**
+- **Hotel reward mechanic** — Hotel now has a visibility counter on My Tasks, but no reward path has been specified. Kasey referenced "bigger claims" but didn't define what a Hotel visit unlocks.
 - **Experience category** — only mentioned in passing as "falls into other categories." Confirm whether it follows hotel's path or is its own thing.
-- **Tie-break beyond Restaurant > Cafe > Bar** — what if all three are tied AND Restaurant has hit its 4-reduction cap? Assume cascade Cafe → Bar, but confirm.
-- **Cycle reset semantics** — when a task completes (e.g. Bar `9/9`), does the new cycle start at `0/10` or could leftover visits roll over? Assume reset to `0/10`.
-- **Update to [`referral-system.md`](referral-system.md)** — the Level 2 = 0.5-credit rule and the auto-placement mechanic both override what's currently written there. That doc should be revised (not this one) when the credit ledger lands.
+- **Tie-break beyond Restaurant > Cafe > Bar** — what if all three are tied AND Restaurant has already received 4 gold ticks this cycle? Assume cascade Cafe → Bar, but confirm.
+- **Cycle reset semantics** — when a task completes (numerator = 10), does the new cycle start at `0/10` or could leftover approved submissions roll over? Assume reset to `0/10` and gold-tick counter also resets.
+- **Update to [`referral-system.md`](referral-system.md)** — the Level 2 = 0.5-credit rule and the +1-numerator auto-placement mechanic both override what's currently written there. That doc should be revised (not this one) when the credit ledger lands.
 
 ---
 
 ## Implementation notes (when ready to build)
 
 - Derive the user's per-category task progress from a `credits_ledger` table:
-  - `(user_id, category, delta_numerator, delta_denominator, reason, source_submission_id, source_referral_id, cycle_id, created_at)`
+  - `(user_id, category, delta_numerator, reason, source_submission_id, source_referral_id, cycle_id, created_at)`
   - `reason` ∈ `{ approved_submission, level1_referral, level2_pair }`
-  - Direct approval rows: `delta_numerator = +1`, `delta_denominator = 0`.
-  - Referral rows: `delta_numerator = 0`, `delta_denominator = -1`, with `category` set by the placement algorithm at write-time.
+  - All rows: `delta_numerator = +1`. Denominator is the constant `10` and is not stored per row.
+  - Direct approvals: `reason = 'approved_submission'`, `source_submission_id` set.
+  - Referrals: `reason = 'level1_referral'` or `'level2_pair'`, `source_referral_id` set, `category` set by the placement algorithm at write-time.
 - Level 2 half-credits live outside the ledger in a small `referral_half_credit_accumulator(user_id, count)` table or column. When `count` becomes even, write a `level2_pair` ledger row and decrement `count` by 2.
-- A category's current `(numerator, denominator)` for the active cycle = sum of deltas with matching `cycle_id`. Once `numerator >= denominator`, the cycle closes: increment task count, mint 1 hotel voucher (or queue it), open a new cycle.
-- Task count = sum of completed cycles across all eligible categories. Don't store separately — derive.
-- Badge tier = `tier_from_task_count(task_count)` with the 5/15/25 thresholds. Derive.
-- Per-cycle 4-reduction cap is enforced at write-time by the placement algorithm: count existing `delta_denominator = -1` rows in the active cycle for that category; if already 4, skip to next category in the tie-break order.
+- A category's current numerator for the active cycle = `SUM(delta_numerator)` with matching `cycle_id`. The submission-vs-referral split for UI `5 (+1) / 10` display comes from filtering by `reason`. Once `numerator >= 10`, the cycle closes: increment task count, mint 1 voucher (or queue it), open a new cycle.
+- Task count = sum of completed cycles across **R/C/B only** (Hotel excluded). Don't store separately — derive.
+- Badge tier = `tier_from_task_count(task_count)` with the **5/15/35** thresholds. Derive.
+- Per-cycle 4-referral cap is enforced at write-time by the placement algorithm: count existing rows with `reason IN ('level1_referral','level2_pair')` in the active cycle for that category; if already 4, skip to next category in the tie-break order.
+- History page events pull from multiple sources: `submissions` (approved), `user_badges` (earned_at), completed `cycle_id` rows in `credits_ledger`, and the future voucher-redemption table. A unified `user_activity` view/feed is the simplest rendering path.

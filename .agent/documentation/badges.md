@@ -1,6 +1,6 @@
 # Badges (current implementation)
 
-> What the **code actually does today**. The model in [`credits-overview.md`](credits-overview.md) describes a different future system; until that lands, this doc is the source of truth.
+> What the **code actually does today**. The target model lives in [`credits-overview.md`](credits-overview.md) and [`badge-rewards.md`](badge-rewards.md) — both locked as of 2026-04-23 but **not yet implemented**. Until the migration to the credits/task model lands, this doc is the source of truth for actual runtime behaviour.
 
 ---
 
@@ -8,9 +8,10 @@
 
 The badge tier/rank system that awards users for accumulating approved submissions per category. Counts come from the `submissions` table; awards land in `user_badges` via a Postgres trigger. The UI shows 12 badges per category (4 tiers × 3 ranks).
 
-This doc deliberately documents the **current** implementation. It also calls out two important issues:
-- **Bar and Hotel badges can never be earned** with today's schema.
-- The credits/task model in [`credits-overview.md`](credits-overview.md) doesn't fit the current trigger.
+This doc deliberately documents the **current** implementation. Key gaps vs the target model:
+- **Bar and Hotel badges can never be earned** with today's schema (fix scoped — see "Issues" below).
+- Current trigger counts raw approved submissions. Target model counts completed tasks (10 credits per cycle) across R/C/B, with Hotel shown on My Tasks as a visibility counter only.
+- Current thresholds are 5 → 120 submissions per category. Target thresholds are 5 / 15 / 35 cumulative tasks across R/C/B for Silver / Gold / Platinum (Bronze default).
 
 ---
 
@@ -118,33 +119,39 @@ Example: `Bar_Bronze_1-min.webp`. Stored in the public `badges` bucket.
 
 ## Issues
 
-### Bar and Hotel badges are unreachable (HIGH)
+### Bar and Hotel badges are unreachable (HIGH — fix scoped 2026-04-23)
 The submission schema enum is `cafe | restaurant | others` ([types/submission.ts:6](types/submission.ts#L6)). When a user submits a proof for a partner store mapped to `bar`, the row goes into `others`. The trigger only counts `cafe` and `restaurant` for category-specific badges; nothing increments `bar` or `hotel` counters.
 
 [hooks/useSubmissions.ts:100-108](hooks/useSubmissions.ts#L100-L108) tries to compute `bar` and `hotel` counts client-side by filtering the `category` field, but since those values never appear, both counts are always **0**. The Bar and Hotel badge grids in the UI render but can never light up.
 
-**Fix options:**
-1. Extend the `partner_store_category` enum to include `bar` and `hotel`, update `mapStoreCategory()` in [components/verified-member/submission/index.tsx:70-81](components/verified-member/submission/index.tsx#L70-L81), update the trigger to count all four, and add corresponding `badge_category` enum values.
-2. Drop Bar and Hotel from `BADGE_CATEGORIES` in [config/badges.ts](config/badges.ts) so the UI doesn't promise something the schema can't deliver.
+**Resolution (decided with Kasey 2026-04-23, see [`credits-overview.md`](credits-overview.md)):**
+- **Bar** → added to the credits/task system. Requires extending `partner_store_category` with `bar`, updating `mapStoreCategory()` in [components/verified-member/submission/index.tsx:70-81](components/verified-member/submission/index.tsx#L70-L81), and extending `badge_category` similarly.
+- **Hotel** → stays in the UI as a visibility-only approved-submission counter on the My Tasks tracker. It does **not** earn credits, is not a referral auto-placement target, and does not contribute to badge tiers. Hotel submissions still need a dedicated enum value and counter source.
+- Per-category badge grids will be replaced by cumulative-task tiers under the new model; the category display survives only as the visual grouping of the progress bars, not as independent badge progressions.
 
 ### Migration enum drift
-The `badge_category` enum in the migration has only `('activity', 'cafe', 'restaurant')` ([migration:60-64](supabase/migrations/20260417151509_remote_schema.sql#L60-L64)) but the UI references four categories. There is no `'bar'` or `'hotel'` value possible for a row in `badges` today, even if you wanted to seed them.
+The `badge_category` enum in the migration has only `('activity', 'cafe', 'restaurant')` ([migration:60-64](supabase/migrations/20260417151509_remote_schema.sql#L60-L64)) but the UI references four categories. There is no `'bar'` or `'hotel'` value possible for a row in `badges` today, even if you wanted to seed them. This must be fixed as part of the credits-ledger migration.
 
 ### Project-overview drift
-[`project-overview.md:42-46`](project-overview.md#L42-L46) describes the categories as "Bar Explorer, Coffee Lover, Foodie, Hotel Explorer" with thresholds "from 5 visits (Bronze 1) to 120 visits (Platinum 3)" — that line matches this doc and the code, but the prior `last updated` date (2026-04-07) predates the credits discussion. The two docs should be kept consistent until the new credits/badge model is decided.
+[`app-project-overview.md`](app-project-overview.md) previously described "Bar Explorer, Coffee Lover, Foodie, Hotel Explorer" with thresholds 5 → 120. That was synced to this doc on 2026-04-23 but still predates the credits-model cutover. Expect both docs to be rewritten once the credits ledger ships.
 
 ---
 
-## Reconciliation with [`credits-overview.md`](credits-overview.md)
+## Reconciliation with [`credits-overview.md`](credits-overview.md) + [`badge-rewards.md`](badge-rewards.md)
 
-| Aspect | What the code does | What credits-overview proposes |
+| Aspect | What the code does today | Target model (locked 2026-04-23) |
 |---|---|---|
-| Categories | Bar / Cafe / Restaurant / Hotel | Restaurant / Cafe / Bar only (Hotel separate "bigger claims") |
-| Tiers | Bronze / Silver / Gold / Platinum × Ranks 1–3 (12 per category) | Bronze (default) / Silver / Gold / Platinum, no ranks |
-| Thresholds | 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120 visits | 5 / 15 / 25 *tasks* (where 1 task = 10 credits) |
-| Award trigger | On submission status change to `approved` | Derived from completed tasks (which derive from credits) |
-| Counters | Per-category approved-submission counts | Per-category task progress + denominator reductions from referrals |
+| Categories | Bar / Cafe / Restaurant / Hotel (4 separate badge grids) | Restaurant / Cafe / Bar earn credits. Hotel shown on My Tasks as visibility counter only. Experience off-system. |
+| Tiers | Bronze / Silver / Gold / Platinum × Ranks 1–3 (12 per category) | Bronze / Silver / Gold / Platinum (Level 1/2/3 thresholds within a tier **still open**) |
+| Thresholds | 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120 per-category visits | **5 / 15 / 35** cumulative tasks across R/C/B (Bronze is default) |
+| Award trigger | On submission status change to `approved` | Derived from completed tasks (10 credits per cycle = 1 task) |
+| Counters | Per-category approved-submission counts | Per-category `(numerator/10)` with gold-tick overlay for referral +1s (max 4 per cycle) |
+| Referral effect | None | +1 numerator on nearest-complete R/C/B task (gold tick on progress bar) |
+| Rewards | Visual only (no redemption) | Each completed task mints 1 voucher at current tier — see [`badge-rewards.md`](badge-rewards.md) |
 
-These models are incompatible. The credits-overview model assumes a credits ledger and per-category task counters that **don't exist in code yet**. The current `check_and_award_badges` trigger should keep working until the credits ledger is built; once it is, the trigger will need to be rewritten (or replaced) to count completed tasks rather than raw submissions.
+The target model is **locked but not implemented**. The current `check_and_award_badges` trigger keeps running until the credits ledger lands; the migration plan will rewrite (or replace) it to count completed tasks.
 
-Confirm with product which model is the long-term target before extending either.
+Still open (see [`credits-overview.md`](credits-overview.md) "Still open"):
+- Level 1/2/3 sub-thresholds within each tier — the Figma shows ranks, Kasey hasn't defined the promotion rule.
+- Hotel "bigger claims" reward mechanic.
+- Experience category treatment.
