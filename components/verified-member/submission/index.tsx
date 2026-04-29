@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Upload, Camera, ChevronDown, CircleCheck as CheckCircle, Clock, X } from 'lucide-react-native';
+import { Camera, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { optimizeSubmissionImage } from '@/lib/optimizeSubmissionImage';
-import type { TransformedSubmission, PartnerStore, Submission } from '@/types';
+import type { PartnerStore } from '@/types';
 
 interface SubmissionProps {
   userData: any;
@@ -20,41 +21,69 @@ interface SubmissionProps {
   setSelectedStore: (store: PartnerStore | null) => void;
   setShowStoreDropdown: (show: boolean) => void;
   partnerStores: PartnerStore[];
-  submissions: TransformedSubmission[];
-  isLoadingSubmissions: boolean;
   fetchSubmissions: (showRefreshIndicator?: boolean) => Promise<void>;
+  onSubmitSuccess?: () => void;
 }
 
-export default function SubmissionComponent({ 
-  userData, 
-  selectedStore, 
-  setSelectedStore, 
+const BAR_GREEN = '#206E56';
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// Date validation window: 6 months back, no future. The AI auto-review
+// has a tighter 21-day window — older receipts go to manual review.
+const MAX_BACK_DAYS = 180;
+
+function daysInMonth(year: number, month0: number): number {
+  return new Date(year, month0 + 1, 0).getDate();
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+export default function SubmissionComponent({
+  userData,
+  selectedStore,
+  setSelectedStore,
   setShowStoreDropdown,
   partnerStores,
-  submissions,
-  isLoadingSubmissions,
-  fetchSubmissions
+  fetchSubmissions,
+  onSubmitSuccess,
 }: SubmissionProps) {
+  const today = useMemo(() => new Date(), []);
+  const currentYear = today.getFullYear();
+  const yearOptions = useMemo(
+    () => [currentYear, currentYear - 1],
+    [currentYear]
+  );
+
+  const [day, setDay] = useState<number | null>(null);
+  const [month, setMonth] = useState<number | null>(null); // 0-indexed
+  const [year, setYear] = useState<number | null>(null);
+  const [dateError, setDateError] = useState<string | null>(null);
+
+  const [pickerOpen, setPickerOpen] = useState<'day' | 'month' | 'year' | null>(null);
+
   const [receiptPhoto, setReceiptPhoto] = useState<string | null>(null);
   const [selfiePhoto, setSelfiePhoto] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [dailySubmissionCount, setDailySubmissionCount] = useState(0);
 
-  // Fetch today's submission count for the user
   const fetchDailySubmissionCount = async () => {
     if (!userData?.id) return;
-    
-    const today = new Date();
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-    
+
     const { count, error } = await supabase
       .from('submissions')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userData.id)
       .gte('created_at', startOfDay)
       .lt('created_at', endOfDay);
-    
+
     if (error) {
       console.error('Error fetching daily count:', error);
     } else {
@@ -66,16 +95,58 @@ export default function SubmissionComponent({
     fetchDailySubmissionCount();
   }, [userData?.id]);
 
-  // Function to map partner store category
+  const dayOptions = useMemo(() => {
+    const m = month ?? today.getMonth();
+    const y = year ?? today.getFullYear();
+    const max = daysInMonth(y, m);
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }, [month, year, today]);
+
+  // Re-validate whenever any part of the date changes.
+  useEffect(() => {
+    if (day === null || month === null || year === null) {
+      setDateError(null);
+      return;
+    }
+    const picked = new Date(year, month, day);
+    const now = new Date();
+    now.setHours(23, 59, 59, 999);
+    if (picked.getTime() > now.getTime()) {
+      setDateError('Date cannot be in the future.');
+      return;
+    }
+    const diffMs = today.getTime() - picked.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    if (diffDays > MAX_BACK_DAYS) {
+      setDateError('Date cannot be older than 6 months.');
+      return;
+    }
+    setDateError(null);
+  }, [day, month, year, today]);
+
   const mapStoreCategory = (storeType: string): string => {
     const normalizedType = storeType.toLowerCase();
-    
     if (normalizedType.includes('restaurant')) {
       return 'restaurant';
-    } else if (normalizedType.includes('coffee') || normalizedType.includes('dessert')) {
+    } else if (
+      normalizedType.includes('coffee') ||
+      normalizedType.includes('dessert') ||
+      normalizedType.includes('cafe')
+    ) {
       return 'cafe';
+    } else if (
+      normalizedType.includes('bar') ||
+      normalizedType.includes('beverage') ||
+      normalizedType.includes('pub')
+    ) {
+      return 'bar';
+    } else if (
+      normalizedType.includes('hotel') ||
+      normalizedType.includes('resort') ||
+      normalizedType.includes('accommodation')
+    ) {
+      return 'hotel';
     } else {
-      // Beverages and any other category
       return 'others';
     }
   };
@@ -125,44 +196,54 @@ export default function SubmissionComponent({
     );
   };
 
-  // Function to upload image to Supabase storage
   const uploadImageToSupabase = async (
     imageUri: string,
     bucketName: string,
     fileName: string,
     contentType: string
   ): Promise<string> => {
-    try {
-      const response = await fetch(imageUri);
-      const arrayBuffer = await response.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
+    const response = await fetch(imageUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
 
-      // Upload to Supabase storage
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(fileName, uint8Array, {
-            contentType,
-            upsert: false,
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, uint8Array, {
+        contentType,
+        upsert: false,
       });
 
-      if (error || !data) {
-        console.error('Upload error:', error);
-        throw new Error(`Failed to upload image: ${error?.message ?? 'unknown'}`);
-      }
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(data.path);
-
-      return publicUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
+    if (error || !data) {
+      console.error('Upload error:', error);
+      throw new Error(`Failed to upload image: ${error?.message ?? 'unknown'}`);
     }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(data.path);
+
+    return publicUrl;
+  };
+
+  const resetForm = () => {
+    setSelectedStore(null);
+    setReceiptPhoto(null);
+    setSelfiePhoto(null);
+    setDay(null);
+    setMonth(null);
+    setYear(null);
+    setDateError(null);
   };
 
   const submitProof = async () => {
+    if (day === null || month === null || year === null) {
+      Alert.alert('Error', 'Please select the date you visited.');
+      return;
+    }
+    if (dateError) {
+      Alert.alert('Invalid date', dateError);
+      return;
+    }
     if (!selectedStore) {
       Alert.alert('Error', 'Please select a partner store');
       return;
@@ -179,52 +260,43 @@ export default function SubmissionComponent({
       Alert.alert('Error', 'User not found. Please try again.');
       return;
     }
-
-    // Check daily quota before proceeding
     if (dailySubmissionCount >= 20) {
       Alert.alert('Daily Limit Reached', 'You have already submitted 20 proof-of-travel today. Please try again tomorrow.');
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
       const timestamp = Date.now();
       const receiptFileName = `receipt_${userData.id}_${timestamp}.webp`;
       const selfieFileName = `selfie_${userData.id}_${timestamp}.webp`;
       const webpType = 'image/webp';
 
-      console.log('Optimizing images (WebP, max 1000px edge)...');
       const [receiptOptimizedUri, selfieOptimizedUri] = await Promise.all([
         optimizeSubmissionImage(receiptPhoto),
         optimizeSubmissionImage(selfiePhoto),
       ]);
 
-      console.log('Starting image uploads...');
       const [receiptUrl, selfieUrl] = await Promise.all([
         uploadImageToSupabase(receiptOptimizedUri, 'submitted-receipt', receiptFileName, webpType),
         uploadImageToSupabase(selfieOptimizedUri, 'submitted-selfie', selfieFileName, webpType),
       ]);
 
-      console.log('Images uploaded successfully:', { receiptUrl, selfieUrl });
-
-      // Map the store category according to the requirements
       const mappedCategory = mapStoreCategory(selectedStore.type);
+      const visitDateIso = `${year}-${pad2(month + 1)}-${pad2(day)}`;
 
-      // Prepare submission data
       const submissionData = {
         user_id: userData.id,
         partner_store_name: selectedStore.name,
-        partner_store_category: mappedCategory, // Use the mapped category
+        partner_store_category: mappedCategory,
         status: 'pending' as const,
         selfie_url: selfieUrl,
-        receipt_url: receiptUrl
+        receipt_url: receiptUrl,
+        receipt_date: visitDateIso,
       };
 
-      console.log('Inserting submission data:', submissionData);
-
-      // Insert submission into database
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('submissions')
         .insert([submissionData])
         .select()
@@ -235,96 +307,179 @@ export default function SubmissionComponent({
         throw new Error(`Failed to save submission: ${error.message}`);
       }
 
-      console.log('Submission saved successfully:', data);
-
-      // Show success message
-      Alert.alert(
-        'Success!', 
-        'Your proof of travel has been submitted successfully. You will be notified once it\'s reviewed.',
-        [
-          { 
-            text: 'OK', 
-            onPress: async () => {
-              // Reset form
-              setSelectedStore(null);
-              setReceiptPhoto(null);
-              setSelfiePhoto(null);
-              // Refresh submissions list and daily count
-              await fetchSubmissions();
-              await fetchDailySubmissionCount();
-            }
-          }
-        ]
-      );
-
+      await fetchSubmissions();
+      await fetchDailySubmissionCount();
+      setShowSuccess(true);
     } catch (error: any) {
       console.error('Submission error:', error);
-      
-      // Check if it's an RLS quota violation
       if (error.message && (error.message.includes('violates row-level security policy') || error.message.includes('submissions'))) {
         Alert.alert('Daily Limit Reached', 'You have already submitted 20 proof-of-travel today. Please try again tomorrow.');
-        // Refresh count in case it changed
         fetchDailySubmissionCount();
       } else {
-        // Show user-friendly error message
         const errorMessage = error.message || 'Failed to submit proof of travel. Please try again.';
         Alert.alert('Error', errorMessage);
       }
-      
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getStatusIcon = (status: Submission['status']) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle size={12} color="#22C55E" />;
-      case 'rejected':
-        return <X size={12} color="#EF4444" />;
-      default:
-        return <Clock size={12} color="#F59E0B" />;
-    }
+  const dismissSuccess = () => {
+    setShowSuccess(false);
+    resetForm();
+    onSubmitSuccess?.();
   };
 
-  const getStatusBadgeStyle = (status: Submission['status']) => {
-    switch (status) {
-      case 'approved':
-        return styles.approvedBadge;
-      case 'rejected':
-        return styles.rejectedBadge;
-      default:
-        return styles.pendingBadge;
+  const renderPickerModal = () => {
+    if (!pickerOpen) return null;
+
+    let options: Array<{ value: number; label: string }> = [];
+    let selected: number | null = null;
+    let onPick: (v: number) => void = () => {};
+    let title = '';
+
+    if (pickerOpen === 'day') {
+      options = dayOptions.map((d) => ({ value: d, label: String(d) }));
+      selected = day;
+      onPick = (v) => setDay(v);
+      title = 'Select Day';
+    } else if (pickerOpen === 'month') {
+      options = MONTHS.map((m, i) => ({ value: i, label: m }));
+      selected = month;
+      onPick = (v) => {
+        setMonth(v);
+        // If the chosen day no longer exists in the new month, clamp it.
+        if (day !== null) {
+          const max = daysInMonth(year ?? today.getFullYear(), v);
+          if (day > max) setDay(max);
+        }
+      };
+      title = 'Select Month';
+    } else if (pickerOpen === 'year') {
+      options = yearOptions.map((y) => ({ value: y, label: String(y) }));
+      selected = year;
+      onPick = (v) => {
+        setYear(v);
+        if (day !== null && month !== null) {
+          const max = daysInMonth(v, month);
+          if (day > max) setDay(max);
+        }
+      };
+      title = 'Select Year';
     }
+
+    return (
+      <Modal
+        transparent
+        animationType="fade"
+        visible={pickerOpen !== null}
+        onRequestClose={() => setPickerOpen(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setPickerOpen(null)}
+        >
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>{title}</Text>
+            <FlatList
+              data={options}
+              keyExtractor={(item) => String(item.value)}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const isSelected = selected === item.value;
+                return (
+                  <TouchableOpacity
+                    style={[styles.pickerRow, isSelected && styles.pickerRowSelected]}
+                    onPress={() => {
+                      onPick(item.value);
+                      setPickerOpen(null);
+                    }}
+                  >
+                    <Text style={[styles.pickerRowText, isSelected && styles.pickerRowTextSelected]}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
   };
 
-  const getStatusTextStyle = (status: Submission['status']) => {
-    switch (status) {
-      case 'approved':
-        return styles.approvedText;
-      case 'rejected':
-        return styles.rejectedText;
-      default:
-        return styles.pendingText;
-    }
-  };
-
-  const getStatusText = (status: Submission['status']) => {
-    switch (status) {
-      case 'approved':
-        return 'Approved';
-      case 'rejected':
-        return 'Rejected';
-      default:
-        return 'Pending';
-    }
-  };
+  if (showSuccess) {
+    return (
+      <View style={styles.successWrap}>
+        <View style={styles.successIconCircle}>
+          <CheckCircle2 size={72} color={BAR_GREEN} />
+        </View>
+        <Text style={styles.successTitle}>Proof Submitted!</Text>
+        <Text style={styles.successBody}>
+          Your proof has been submitted — credits will land once an admin approves your proof.
+        </Text>
+        <TouchableOpacity style={styles.successButton} onPress={dismissSuccess}>
+          <Text style={styles.successButtonText}>OK</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.submitContainer}>
-      {/* Partner Store Selection */}
-      <View style={styles.formSection}>
-        <Text style={styles.formLabel}>Select Partner Store</Text>
+      {/* 1. Date Visit */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.numberBubble}>
+            <Text style={styles.numberBubbleText}>1</Text>
+          </View>
+          <Text style={styles.cardTitle}>Date Visit</Text>
+        </View>
+
+        <View style={styles.dateRow}>
+          <TouchableOpacity
+            style={styles.dateField}
+            onPress={() => setPickerOpen('day')}
+          >
+            <Text style={[styles.dateFieldText, day === null && styles.placeholderText]}>
+              {day !== null ? String(day) : 'Date'}
+            </Text>
+            <ChevronDown size={16} color="#64748B" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.dateField}
+            onPress={() => setPickerOpen('month')}
+          >
+            <Text style={[styles.dateFieldText, month === null && styles.placeholderText]}>
+              {month !== null ? MONTHS[month] : 'Month'}
+            </Text>
+            <ChevronDown size={16} color="#64748B" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.dateField}
+            onPress={() => setPickerOpen('year')}
+          >
+            <Text style={[styles.dateFieldText, year === null && styles.placeholderText]}>
+              {year !== null ? String(year) : 'Year'}
+            </Text>
+            <ChevronDown size={16} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+
+        {dateError && <Text style={styles.errorText}>{dateError}</Text>}
+      </View>
+
+      {/* 2. Select a Partner Store */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.numberBubble}>
+            <Text style={styles.numberBubbleText}>2</Text>
+          </View>
+          <Text style={styles.cardTitle}>Select a Partner Store</Text>
+        </View>
         <TouchableOpacity
           style={styles.storeSelector}
           onPress={() => setShowStoreDropdown(true)}
@@ -336,9 +491,14 @@ export default function SubmissionComponent({
         </TouchableOpacity>
       </View>
 
-      {/* Receipt Photo Upload */}
-      <View style={styles.formSection}>
-        <Text style={styles.formLabel}>Receipt Photo</Text>
+      {/* 3. Upload Receipt */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.numberBubble}>
+            <Text style={styles.numberBubbleText}>3</Text>
+          </View>
+          <Text style={styles.cardTitle}>Upload Receipt</Text>
+        </View>
         <TouchableOpacity
           style={styles.photoUpload}
           onPress={() => showImagePicker('receipt')}
@@ -354,9 +514,14 @@ export default function SubmissionComponent({
         </TouchableOpacity>
       </View>
 
-      {/* Selfie Photo Upload */}
-      <View style={styles.formSection}>
-        <Text style={styles.formLabel}>Selfie at Restaurant</Text>
+      {/* 4. Upload Selfie */}
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.numberBubble}>
+            <Text style={styles.numberBubbleText}>4</Text>
+          </View>
+          <Text style={styles.cardTitle}>Upload Selfie</Text>
+        </View>
         <TouchableOpacity
           style={styles.photoUpload}
           onPress={() => showImagePicker('selfie')}
@@ -372,107 +537,26 @@ export default function SubmissionComponent({
         </TouchableOpacity>
       </View>
 
-      {/* Submit Button */}
+      {/* 5. Submit */}
       <TouchableOpacity
         style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
         onPress={submitProof}
         disabled={isSubmitting}
       >
-        <Upload size={20} color="white" />
         <Text style={styles.submitButtonText}>
-          {isSubmitting ? 'Submitting...' : 'Submit Proof'}
+          {isSubmitting ? 'Submitting…' : 'Submit'}
         </Text>
       </TouchableOpacity>
 
-      {/* Daily Submission Warning */}
       {dailySubmissionCount >= 19 && (
         <Text style={[styles.warningText, dailySubmissionCount >= 20 && styles.errorText]}>
-          {dailySubmissionCount >= 20 
-            ? 'Daily limit reached. You cannot submit more today.' 
-            : `Warning: You have submitted ${dailySubmissionCount}/20 today.`
-          }
+          {dailySubmissionCount >= 20
+            ? 'Daily limit reached. You cannot submit more today.'
+            : `Warning: You have submitted ${dailySubmissionCount}/20 today.`}
         </Text>
       )}
 
-      {/* Submissions Table */}
-      <View style={styles.tableSection}>
-        <View style={styles.tableTitleContainer}>
-          <Text style={styles.tableTitle}>Your Submissions</Text>
-          <View style={styles.refreshButton}>
-            <Upload 
-              size={18} 
-              color="#64748B" 
-              style={[isLoadingSubmissions && { opacity: 0.5 }]}
-            />
-          </View>
-        </View>
-        
-        {submissions.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              {isLoadingSubmissions ? 'Loading submissions...' : 'No submissions yet'}
-            </Text>
-            <Text style={styles.emptyStateSubtext}>
-              {!isLoadingSubmissions && 'Submit your first proof of travel above!'}
-            </Text>
-          </View>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.table}>
-              {/* Table Header */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableHeaderText, styles.dateColumn]}>Date</Text>
-                <Text style={[styles.tableHeaderText, styles.restaurantColumn]}>Restaurant</Text>
-                <Text style={[styles.tableHeaderText, styles.categoryColumn]}>Category</Text>
-                <Text style={[styles.tableHeaderText, styles.photoColumn]}>Receipt</Text>
-                <Text style={[styles.tableHeaderText, styles.photoColumn]}>Selfie</Text>
-                <Text style={[styles.tableHeaderText, styles.statusColumn]}>Status</Text>
-              </View>
-
-              {/* Table Rows */}
-              {submissions.map((submission) => (
-                <View key={submission.id} style={styles.tableRow}>
-                  <Text style={[styles.tableCellText, styles.dateColumn]}>
-                    {submission.submissionDate}
-                  </Text>
-                  <Text style={[styles.tableCellText, styles.restaurantColumn]} numberOfLines={2}>
-                    {submission.restaurantName}
-                  </Text>
-                  <Text style={[styles.tableCellText, styles.categoryColumn]} numberOfLines={1}>
-                    {submission.category}
-                  </Text>
-                  <View style={[styles.tableCell, styles.photoColumn]}>
-                    {submission.receiptPhoto ? (
-                      <Image source={{ uri: submission.receiptPhoto }} style={styles.tablePhoto} />
-                    ) : (
-                      <View style={styles.photoPlaceholder}>
-                        <Text style={styles.photoPlaceholderText}>No Image</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={[styles.tableCell, styles.photoColumn]}>
-                    {submission.selfiePhoto ? (
-                      <Image source={{ uri: submission.selfiePhoto }} style={styles.tablePhoto} />
-                    ) : (
-                      <View style={styles.photoPlaceholder}>
-                        <Text style={styles.photoPlaceholderText}>No Image</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={[styles.tableCell, styles.statusColumn]}>
-                    <View style={[styles.statusBadge, getStatusBadgeStyle(submission.status)]}>
-                      {getStatusIcon(submission.status)}
-                      <Text style={[styles.statusText, getStatusTextStyle(submission.status)]}>
-                        {getStatusText(submission.status)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          </ScrollView>
-        )}
-      </View>
+      {renderPickerModal()}
     </View>
   );
 }
@@ -481,58 +565,104 @@ const styles = StyleSheet.create({
   submitContainer: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    gap: 16,
   },
-  formSection: {
-    marginBottom: 24,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  formLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     marginBottom: 12,
   },
+  numberBubble: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: BAR_GREEN,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  numberBubbleText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // Date row
+  dateRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateField: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  dateFieldText: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '600',
+  },
+
+  // Store selector
   storeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: '#E2E8F0',
   },
   storeSelectorText: {
-    fontSize: 16,
-    color: '#1e293b',
+    fontSize: 15,
+    color: '#0F172A',
   },
   placeholderText: {
-    color: '#64748b',
+    color: '#94A3B8',
+    fontWeight: '500',
   },
+
+  // Photo upload
   photoUpload: {
-    backgroundColor: 'white',
+    backgroundColor: '#F8FAFC',
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#e2e8f0',
+    borderColor: '#E2E8F0',
     borderStyle: 'dashed',
-    height: 120,
+    height: 140,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    overflow: 'hidden',
   },
   uploadedPhoto: {
     width: '100%',
     height: '100%',
-    borderRadius: 10,
   },
   uploadPlaceholder: {
     alignItems: 'center',
@@ -540,17 +670,17 @@ const styles = StyleSheet.create({
   },
   uploadPlaceholderText: {
     fontSize: 14,
-    color: '#64748b',
+    color: '#64748B',
     fontWeight: '500',
   },
+
+  // Submit
   submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#206E56',
-    borderRadius: 12,
+    backgroundColor: BAR_GREEN,
+    borderRadius: 999,
     paddingVertical: 16,
-    gap: 8,
+    alignItems: 'center',
+    marginTop: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -561,160 +691,101 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    color: 'white',
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
-  },
-  tableSection: {
-    marginTop: 32,
-  },
-  tableTitleContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  tableTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#CBEED2',
-  },
-  emptyState: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
-  table: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  tableHeaderText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#475569',
-    textTransform: 'uppercase',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  tableCell: {
-    justifyContent: 'center',
-  },
-  tableCellText: {
-    fontSize: 14,
-    color: '#1e293b',
-  },
-  dateColumn: {
-    width: 90,
-  },
-  restaurantColumn: {
-    width: 120,
-  },
-  categoryColumn: {
-    width: 80,
-  },
-  photoColumn: {
-    width: 60,
-  },
-  statusColumn: {
-    width: 80,
-  },
-  tablePhoto: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-  },
-  photoPlaceholder: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  photoPlaceholderText: {
-    fontSize: 8,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  approvedBadge: {
-    backgroundColor: '#f0fdf4',
-  },
-  pendingBadge: {
-    backgroundColor: '#fefce8',
-  },
-  rejectedBadge: {
-    backgroundColor: '#fef2f2',
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  approvedText: {
-    color: '#206E56',
-  },
-  pendingText: {
-    color: '#E5C69E',
-  },
-  rejectedText: {
-    color: '#EF4444',
+    fontWeight: '700',
   },
   warningText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#F59E0B',
     textAlign: 'center',
-    marginTop: 8,
   },
   errorText: {
     color: '#EF4444',
+    fontSize: 13,
+    marginTop: 8,
+  },
+
+  // Picker modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.4)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+    maxHeight: '60%',
+  },
+  pickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  pickerRow: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  pickerRowSelected: {
+    backgroundColor: '#E6F4EE',
+  },
+  pickerRowText: {
+    fontSize: 15,
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  pickerRowTextSelected: {
+    color: BAR_GREEN,
+    fontWeight: '700',
+  },
+
+  // Success screen
+  successWrap: {
+    paddingHorizontal: 24,
+    paddingTop: 64,
+    paddingBottom: 32,
+    alignItems: 'center',
+  },
+  successIconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#E6F4EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successBody: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  successButton: {
+    alignSelf: 'stretch',
+    backgroundColor: BAR_GREEN,
+    borderRadius: 999,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
