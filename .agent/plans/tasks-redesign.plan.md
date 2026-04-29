@@ -4,28 +4,28 @@ overview: "Rebuild the Challenges/Tasks tab around the locked credits/task model
 todos:
   - id: phase1-backend
     content: Extend enums, add credits_ledger + accumulator + vouchers, rewrite badge/credit triggers, add useTasks hook and unified activity feed source.
-    status: pending
+    status: completed
   - id: phase2-tasks-shell
     content: Rename Challenges→Tasks, drop points pill, restructure subtabs to My Tasks / Submit / Rewards. Unverified members keep current flow.
-    status: pending
+    status: completed
   - id: phase3-my-tasks
     content: Build the My Tasks subtab — progress section (4 category bars with gold ticks), Badge summary card, latest-5 history list.
-    status: pending
+    status: completed
   - id: phase4-history-page
     content: Standalone paginated History page rendering the unified event feed (submissions / badges / task completions / vouchers).
-    status: pending
+    status: completed
   - id: phase5-badge-detail
-    content: Badge detail page with 4 category sections of tier/level markers. Blocked on L1/2/3 promotion formula.
-    status: blocked
+    content: Badge detail page with 4 category sections of tier/level markers. L1/2/3 promotion formula now defined (2026-04-23).
+    status: completed
   - id: phase6-badge-share
     content: Per-category badge collection share card, routed from the badge detail page's share CTA.
-    status: pending
+    status: completed
   - id: phase7-submit-form
     content: New Submit form (Date/Month/Year → Partner → Receipt → Selfie → Submit) and dedicated "Proof Submitted" screen replacing the alert.
-    status: pending
+    status: completed
   - id: phase8-referral-notice
     content: "Bonus 1 Credit for {category}" banner on Referrals page and matching gold-tick animation on the recipient's My Tasks bar.
-    status: pending
+    status: completed
 isProject: true
 ---
 
@@ -44,9 +44,9 @@ Ship the Figma-designed "Tasks" experience on top of the credits/task model lock
 
 If any of these contradict this plan, the docs win — update the plan, not the spec.
 
-## Open questions (must resolve before Phase 5 + 6 ship)
+## Open questions
 
-- **L1/2/3 sub-level promotion formula.** Figma shows ranks within each tier; Kasey never specified the thresholds. Options (A) global level mirrored per category, (B) per-category independent counter, (C) global tier + per-category level. Need the answer *and* the numeric thresholds (e.g. how many tasks/submissions promote from L1→L2). Phase 5 badge detail page and Phase 6 share card can't ship without this.
+- ~~**L1/2/3 sub-level promotion formula.**~~ **Resolved 2026-04-23.** Single global tier+level per user, derived from cumulative R/C/B task count via the table in [credits-overview.md](.agent/documentation/credits-overview.md) "Badge tiers + levels". Same value mirrored across all 4 category rows on the badge detail page; rows differ only in art. Rewards remain tier-based, not level-based.
 - **Hotel reward mechanic.** Hotel shows a visibility counter but earns nothing. Design doesn't show what a Hotel submission actually unlocks. Track in [credits-overview.md](.agent/documentation/credits-overview.md) "Still open."
 - **Cycle rollover edge cases.** If a cycle closes at numerator > 10 (shouldn't happen with +1 enforcement, but defensive) — discard, roll over, or error?
 
@@ -253,7 +253,7 @@ New route: `app/tasks/history.tsx`.
 
 ---
 
-## Phase 5 — Badge detail page (Design 3)  **⛔ blocked on L1/2/3**
+## Phase 5 — Badge detail page (Design 3)
 
 New route: `app/tasks/badges.tsx` (replaces or wraps the current [components/verified-member/badges/index.tsx](components/verified-member/badges/index.tsx) when landed).
 
@@ -263,24 +263,33 @@ New route: `app/tasks/badges.tsx` (replaces or wraps the current [components/ver
 - 4 scrollable category sections: `Restaurant`, `Cafe`, `Bar`, `Hotel`. Each section:
   - Heading + right-aligned share CTA (`↗`) that opens the Badge Collection share card (Phase 6).
   - Horizontal scroll of 12 badge tiles (4 tiers × 3 levels). Earned tiles show in color; locked tiles grayscale with reduced opacity.
-  - Horizontal progress rail under the tiles showing where the user currently sits. Caption under each tile: `Level {N}` + `{Tier}` (e.g. `Level 1 Platinum`).
+  - Horizontal progress rail under the tiles showing where the user currently sits.
 
-### 5.2 Blocked items
+### 5.2 Tier + level resolution (locked 2026-04-23)
 
-Cannot finalize:
-- The tile order (per-category vs global).
-- The exact promotion thresholds for L1 → L2 → L3.
-- Whether "earned" state is driven by global tier or per-category count.
+Tier+level is a single global value per user, derived from cumulative completed tasks across **R/C/B** (Hotel excluded). All 4 category rows display the same global tier+level — they differ only in category-themed badge art.
 
-Resolve the open question in this file's top section first, then return to 5.1 and fill in the tile data source.
+Full threshold table + reference TypeScript impl: see [`badges.md`](.agent/documentation/badges.md) "Tier + level table". Don't duplicate the numbers here — link back to that doc.
 
-### 5.3 Assets
+Tile state per row:
+- Tile is **earned** if its tier+level position is `<=` the user's current global tier+level (compare via the linear order Bronze L1 → Bronze L2 → … → Platinum L3).
+- Exactly one tile is `current` (the user's present tier+level).
+- All later tiles are `locked` (grayscale).
 
-Badge images already hosted at `${SUPABASE_URL}/storage/v1/object/public/badges/{Category}_{Tier}_{Rank}-min.webp` per [config/badges.ts:62-65](config/badges.ts#L62-L65). Bar and Hotel images must be uploaded to the bucket before this phase can render — verify with the bucket contents.
+Caption under each tile: `Level {N}` + `{Tier}` (e.g. `Level 1 Platinum`).
+
+### 5.3 Data wiring
+
+Extend [hooks/useTasks.ts](hooks/useTasks.ts) to expose `level: 1 | 2 | 3 | null` alongside `tier`. Helper function `tierLevelFor(taskCount)` lives next to `tierFromTaskCount` (reference impl in [badges.md](.agent/documentation/badges.md) "Target tier + level table"). Backend trigger needs no change for the L1/L2/L3 mechanic since it's purely derivable.
+
+Per-category badge art uses the existing URL pattern: `${SUPABASE_URL}/storage/v1/object/public/badges/{Category}_{Tier}_{Rank}-min.webp`. Bar and Hotel image variants must be uploaded to the bucket before this phase can render — verify with bucket contents.
 
 ### 5.4 Acceptance
 
-- (Deferred until unblocked.) Category scrolls, tile states match ledger-derived tier/level, share CTA triggers Phase 6.
+- 4 category rows render, each with 12 tiles in tier-then-level order.
+- All 4 rows highlight the same tile as `current`.
+- Earned/locked state matches the user's `useTasks().tier` + `level`.
+- Share CTA per row launches Phase 6 with the right category arg.
 
 ---
 
@@ -377,7 +386,7 @@ Finally fulfill the deferred items from [referral-system.md](.agent/documentatio
 2. **Phase 2** gates the rest of the UI work; keep it small and mergeable on its own.
 3. **Phases 3 + 7 + 4** in parallel if more than one person is on the project — they share Phase 2 but don't touch each other's files.
 4. **Phase 8** can start as soon as Phase 2 lands; it doesn't need the full My Tasks UI to test the trigger + banner.
-5. **Phases 5 + 6** wait on the L1/2/3 resolution. If that answer comes in early, they can slot anywhere after Phase 1.
+5. **Phases 5 + 6** unblocked 2026-04-23 — slot anywhere after Phase 1.
 
 ## Notes for incremental delivery
 

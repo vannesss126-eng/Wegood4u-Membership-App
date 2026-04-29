@@ -55,7 +55,10 @@ The app is mid-transition from a submission-count model to a credits/tasks model
 *   **Rewards per tier:** Bronze = Airbnb, Silver = 3★, Gold = 4★, Platinum = specialty/5★/resort voucher.
 *   **Referral effect:** qualifying referral = +1 numerator on recipient's nearest-complete task (gold tick on 0/2/4/6/8/10 progress bar), max 4 per category per cycle.
 
-### 2.4 Affiliate & Referral System
+### 2.4 Activity History
+Unified, paginated activity feed surfaced as the **History** snippet on My Tasks and the standalone **/tasks/history** page. Backed by a `SECURITY DEFINER` Postgres RPC (`get_user_activity`) that UNIONs submissions, badges, completed cycles, and redeemed vouchers into one chronological list. Full spec in [`history-feed.md`](history-feed.md).
+
+### 2.5 Affiliate & Referral System
 Tracks relationships via an `inviter_id` field in the user profile. Full rules in [`referral-system.md`](referral-system.md).
 *   Affiliates can distribute unique generated codes.
 *   The system records direct (Level 1) and indirect (Level 2) referrals via recursive SQL Views (`referral_tree`).
@@ -103,4 +106,4 @@ While Supabase manages structured relational user data, **Firebase** is leverage
 
 ---
 
-*(Last Updated: 2026-04-23 — synced sections 2.3 and 2.4 with the locked credits/task model in [`credits-overview.md`](credits-overview.md) and [`badge-rewards.md`](badge-rewards.md).)*
+*(Last Updated: 2026-04-26 — added section 2.4 (Activity History) and renumbered the affiliate section to 2.5; new doc [`history-feed.md`](history-feed.md). Previous update 2026-04-23 synced sections 2.3 and 2.4 with the locked credits/task model in [`credits-overview.md`](credits-overview.md) and [`badge-rewards.md`](badge-rewards.md).)*

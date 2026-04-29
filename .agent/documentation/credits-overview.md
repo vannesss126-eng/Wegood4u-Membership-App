@@ -121,26 +121,17 @@ Each invitee triggers **exactly one** referral credit for their inviter — on t
   > "1 task = 1 hotel stay" … "yes. hotel voucher" — Kasey
 - Tasks are unlimited — completing one in a category resets that category's counter and starts a new cycle.
 
-### Badge tiers (cumulative tasks across all eligible categories)
+### Badge tiers + levels
 
-Thresholds per Kasey, 2026-04-23 WhatsApp (**supersedes the earlier 5/15/25 figure**):
+Tier and level are a single global value per user, derived from cumulative completed tasks across Restaurant + Cafe + Bar (Hotel excluded). Tier thresholds are 5 / 15 / 35 tasks for Silver / Gold / Platinum (Bronze covers tasks 1–4); each tier subdivides into 3 levels.
 
-| Tier | Tasks required | Reward category |
-|---|---|---|
-| Bronze | default (0–4 tasks) | Airbnb voucher |
-| Silver | 5 tasks | 3-star hotel voucher |
-| Gold | 15 tasks | 4-star hotel voucher |
-| Platinum | 35+ tasks | Specialty hotel / 5-star / resort voucher |
-
-Full reward mapping lives in [`badge-rewards.md`](badge-rewards.md).
-
-"Tasks" = completed cycles across Restaurant + Cafe + Bar combined. Hotel tasks do **not** contribute to badge tier.
+**The full tier+level table, reference TypeScript implementation, reward mapping, asset URL pattern, and trigger wiring all live in [`badges.md`](badges.md).** That document is the source of truth — this file should not duplicate it.
 
 > "1-5 is Bronze / 5-15 is Silver / 15-35 is Gold / 35p onwards is Platinum" — Kasey
 > "5 task completion = 50 successfull approval = level up to Silver" — Kasey
 > "if user completed 4 task = 40 shop, he start a new task, he still in bronze" — Kasey
-
-**Sub-levels (Level 1/2/3 within a tier)** — the Figma shows rank/level markers within each tier. Kasey has not specified the thresholds that promote a user from Level 1 → 2 → 3 within a tier, nor whether the level is global or per-category. Tracked in "Still open" below.
+>
+> L1/L2/L3 sub-thresholds resolved 2026-04-23 — see [`badges.md`](badges.md).
 
 ### Hotel "bigger claims" track — TBD
 Hotel (and possibly Experience) don't feed the credits/task loop. Kasey said hotels "reward bigger claims" but didn't specify the mechanism. **Confirm with Kasey before designing this.**
@@ -196,12 +187,12 @@ The latest 5 events surface on the My Tasks subtab; the full paginated feed live
 | 5 | Voucher caps / expiry | Skipped — no vouchers are wired up yet. Revisit when redemption is built. |
 | 6 | Badge tier thresholds | **5 / 15 / 35** tasks for Silver / Gold / Platinum (updated 2026-04-23 from 5/15/25). Bronze is default. |
 | 7 | Hotel on My Tasks | Shown with approved-submission counter; does not earn credits, is not a referral auto-placement target, does not contribute to badge tier. |
+| 8 | L1/L2/L3 sub-level thresholds | Resolved 2026-04-23. Single global tier+level per user, derived from cumulative R/C/B task count. Full table + reference impl in [`badges.md`](badges.md). Same value mirrored across all 4 category rows on the badge detail page. |
 
 ---
 
 ## Still open
 
-- **Badge sub-level thresholds (Level 1/2/3 within a tier)** — Figma shows level markers within each tier. Kasey has not specified what promotes a user from L1 → L2 → L3, nor whether it's per-category or global. **Resolution needed before badge UI implementation.**
 - **Hotel reward mechanic** — Hotel now has a visibility counter on My Tasks, but no reward path has been specified. Kasey referenced "bigger claims" but didn't define what a Hotel visit unlocks.
 - **Experience category** — only mentioned in passing as "falls into other categories." Confirm whether it follows hotel's path or is its own thing.
 - **Tie-break beyond Restaurant > Cafe > Bar** — what if all three are tied AND Restaurant has already received 4 gold ticks this cycle? Assume cascade Cafe → Bar, but confirm.

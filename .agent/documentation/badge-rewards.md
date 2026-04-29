@@ -41,8 +41,9 @@ last_updated: 2026-04-23
 - **Expiry** — no expiry specified. Default to none until product says otherwise.
 - **Regional availability** — vouchers only valid in certain regions? Out of scope until redemption is built.
 - **Stacking** — can users combine multiple Airbnb vouchers into one booking? Out of scope.
-- **Sub-level rewards (Level 1/2/3 within a tier)** — Kasey only specified per-tier rewards. It's unclear whether, say, Silver L1 vs Silver L3 unlock different rewards. Tracked in [`credits-overview.md`](credits-overview.md) "Still open".
 - **Hotel category reward** — Kasey said Hotel submissions go on a "bigger claims" track but didn't specify what that rewards. Tracked in [`credits-overview.md`](credits-overview.md) "Still open".
+
+> Resolved 2026-04-23: Sub-level rewards (L1/L2/L3) are **tier-based only** — Silver L1 and Silver L3 mint identical 3-star hotel vouchers. Level differentiates badge UI bragging rights, not the redemption value.
 
 ---
 
