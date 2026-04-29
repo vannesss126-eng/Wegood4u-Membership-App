@@ -13,6 +13,26 @@ Each user (affiliate) can invite friends. Those invites form a **two-level tree*
 
 The affiliate can see both levels in the "Referrals" tab of the Invite Friends screen. Level 1 users are shown as top-level rows; expanding a row reveals their Level 2 invitees nested underneath.
 
+### Referral count is unlimited (locked 2026-04-23)
+
+There is **no cap** on how many people a single affiliate can refer. An affiliate can have an arbitrary number of Level 1 referrals and arbitrary Level 2 nesting underneath each. The same `invitation_codes.code` is reused for every invite — there is no per-code usage limit, no per-day rate limit, and no concept of "deleting" a referral to free up a slot.
+
+> "i dont think it should limit to 7 referral only" … "it should be unlimited" … "Unlimited ya" — Kasey, 2026-04-23
+
+This rejects an earlier proposal to cap referrals at 7 with a "delete inactive referral" feature to free slots. **Do not introduce that cap or delete-referral feature** — they were explicitly rejected.
+
+**Don't confuse this with the per-cycle cap in [`credits-overview.md`](credits-overview.md):** an affiliate can earn at most 4 referral *gold ticks* per category per cycle (so at most 4 of the 10 credits per cycle come from referrals). That's a per-cycle credit-economics cap, not a referral-count cap. There's no upper bound on the number of qualified referrals an affiliate can accumulate over time — referral credits beyond the 4-tick cap simply auto-place onto the next-closest category, or wait for the next cycle once all three categories are capped.
+
+### Implementation invariants — keep these true
+
+| Place | Today | Rule |
+|---|---|---|
+| `invitation_codes` table | has `usage_count` (counter), `is_active`, `code`. No `max_uses` column. | **Do not add** `max_uses` or any cap column. |
+| Trigger that bumps `usage_count` ([migration:270-282](supabase/migrations/20260417151509_remote_schema.sql#L270-L282)) | unconditional `usage_count = usage_count + 1` | **Do not add** a `WHERE usage_count < N` guard. |
+| `useReferrals` hook ([hooks/useReferrals.ts](hooks/useReferrals.ts)) | returns all rows from `referral_tree` | **Do not add** `.slice(0, N)` or pagination caps. The tree shows everyone. |
+| Referrals UI ([components/invite-friends/referrals.tsx](components/invite-friends/referrals.tsx)) | renders every Level 1 row | **Do not add** a list cap. |
+| RLS on `invitation_codes` | inserts gated by role, no count check | Don't add a count check. |
+
 ---
 
 ## Current implementation (as of 2026-04-21)
@@ -105,6 +125,7 @@ Everything after the credit event — auto-placement, ledger shape, cycle mechan
 
 ## Open questions to resolve with product
 - ~~Do Level 2 qualified referrals award anything to the top-level affiliate?~~ **Resolved 2026-04-22:** yes, +0.5 per qualified Level 2 invitee, settled as +1 credit per pair. Full mechanic in [`credits-overview.md`](credits-overview.md).
+- ~~Is there a cap on the number of referrals per affiliate?~~ **Resolved 2026-04-23: no.** Referrals are unlimited (see "Referral count is unlimited" above). Earlier 7-cap-with-delete-slot proposal was rejected.
 - Claw-back policy if an approved submission is later rejected.
 - Does the "within 1 hour" copy reflect a real business rule, or is it just UX framing?
-- Is there a cap on referral credits per affiliate per day / month? (Per-category per-cycle cap is 4 gold ticks — see [`credits-overview.md`](credits-overview.md) — but that's a per-cycle mechanic, not a per-affiliate rate limit.)
+- Is there a cap on referral *credits* per affiliate per day / month? (Per-category per-cycle cap is 4 gold ticks — see [`credits-overview.md`](credits-overview.md) — but that's a per-cycle mechanic, not a per-affiliate rate limit. The unlimited-referrals decision strongly suggests no rate limit either, but confirm explicitly.)
