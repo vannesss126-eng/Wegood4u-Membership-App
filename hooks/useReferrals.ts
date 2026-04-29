@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Alert } from 'react-native';
 
+export type ReferralState = 'registered' | 'verified' | 'active';
+
 export interface ReferralData {
   affiliate_id: string;
   user_id: string;
@@ -10,6 +12,9 @@ export interface ReferralData {
   level: number;
   created_at: string;
   inviter_id: string | null;
+  verification_completed: boolean | null;
+  first_approved_submission_at: string | null;
+  referral_state: ReferralState;
 }
 
 export interface Level1Referral {
@@ -47,7 +52,9 @@ export function useReferrals(userId: string | undefined): UseReferralsReturn {
       // Select columns matching the view structure: affiliate_id, user_id, username, full_name, level, created_at, inviter_id
       const { data, error: fetchError } = await supabase
         .from('referral_tree')
-        .select('affiliate_id, user_id, username, full_name, level, created_at, inviter_id')
+        .select(
+          'affiliate_id, user_id, username, full_name, level, created_at, inviter_id, verification_completed, first_approved_submission_at, referral_state'
+        )
         .eq('affiliate_id', userId)
         .order('level', { ascending: true })
         .order('created_at', { ascending: true });

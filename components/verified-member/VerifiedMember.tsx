@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Upload, Award, Ticket } from 'lucide-react-native';
+import { ClipboardList, Upload, Ticket } from 'lucide-react-native';
 import Submission from './submission';
-import Badges from './badges';
 import Rewards from './rewards';
+import MyTasks from './my-tasks';
 import { useUserSubmissions } from '@/hooks/useSubmissions';
 import type { PartnerStore } from '@/types';
 
@@ -16,6 +16,8 @@ interface VerifiedMemberProps {
   partnerStores: PartnerStore[];
 }
 
+type TabKey = 'my-tasks' | 'submit' | 'rewards';
+
 export default function VerifiedMember({
   userData,
   selectedStore,
@@ -23,35 +25,23 @@ export default function VerifiedMember({
   setShowStoreDropdown,
   partnerStores
 }: VerifiedMemberProps) {
-  const [activeTab, setActiveTab] = useState<'submit' | 'badges' | 'rewards'>('submit');
-  // Removed insets usage
+  const [activeTab, setActiveTab] = useState<TabKey>('my-tasks');
 
-  // Use the custom hook for fetching user submissions
-  const {
-    submissions,
-    approvedCounts,
-    stats,
-    isLoading: isLoadingSubmissions,
-    refetch: fetchSubmissions
-  } = useUserSubmissions(userData?.id);
+  const { refetch: fetchSubmissions } = useUserSubmissions(userData?.id);
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Travel Proof</Text>
-        <View style={styles.stats}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.approved}</Text>
-            <Text style={styles.statLabel}>Approved</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{stats.pending}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-        </View>
-      </View>
-
       <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'my-tasks' && styles.activeTab]}
+          onPress={() => setActiveTab('my-tasks')}
+        >
+          <ClipboardList size={18} color={activeTab === 'my-tasks' ? '#206E56' : '#64748B'} />
+          <Text style={[styles.tabText, activeTab === 'my-tasks' && styles.activeTabText]}>
+            My Tasks
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.tab, activeTab === 'submit' && styles.activeTab]}
           onPress={() => setActiveTab('submit')}
@@ -59,16 +49,6 @@ export default function VerifiedMember({
           <Upload size={18} color={activeTab === 'submit' ? '#206E56' : '#64748B'} />
           <Text style={[styles.tabText, activeTab === 'submit' && styles.activeTabText]}>
             Submit
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'badges' && styles.activeTab]}
-          onPress={() => setActiveTab('badges')}
-        >
-          <Award size={18} color={activeTab === 'badges' ? '#206E56' : '#64748B'} />
-          <Text style={[styles.tabText, activeTab === 'badges' && styles.activeTabText]}>
-            Badges
           </Text>
         </TouchableOpacity>
 
@@ -88,6 +68,9 @@ export default function VerifiedMember({
         contentContainerStyle={{ paddingBottom: 90 }}
         showsVerticalScrollIndicator={false}
       >
+        {activeTab === 'my-tasks' && (
+          <MyTasks userData={userData} />
+        )}
         {activeTab === 'submit' && (
           <Submission
             userData={userData}
@@ -95,18 +78,8 @@ export default function VerifiedMember({
             setSelectedStore={setSelectedStore}
             setShowStoreDropdown={setShowStoreDropdown}
             partnerStores={partnerStores}
-            submissions={submissions}
-            isLoadingSubmissions={isLoadingSubmissions}
             fetchSubmissions={fetchSubmissions}
-          />
-        )}
-        {activeTab === 'badges' && (
-          <Badges
-            userData={userData}
-            submissions={submissions}
-            approvedCounts={approvedCounts}
-            isLoadingSubmissions={isLoadingSubmissions}
-            fetchSubmissions={fetchSubmissions}
+            onSubmitSuccess={() => setActiveTab('my-tasks')}
           />
         )}
         {activeTab === 'rewards' && (
@@ -122,42 +95,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  stats: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#206E56',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#64748B',
-  },
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: 'white',
     marginHorizontal: 20,
-    marginVertical: 16,
+    marginTop: 16,
+    marginBottom: 16,
     borderRadius: 12,
     padding: 4,
     shadowColor: '#000',

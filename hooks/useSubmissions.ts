@@ -433,6 +433,8 @@ export function useSubmissionStats(userId?: string) {
     byCategory: {
       cafe: submissions.filter(s => s.partner_store_category === 'cafe').length,
       restaurant: submissions.filter(s => s.partner_store_category === 'restaurant').length,
+      bar: submissions.filter(s => s.partner_store_category === 'bar').length,
+      hotel: submissions.filter(s => s.partner_store_category === 'hotel').length,
       others: submissions.filter(s => s.partner_store_category === 'others').length,
     },
   };
