@@ -271,7 +271,7 @@ export type Database = {
           id: number;
           user_id: string;
           partner_store_name: string;
-          partner_store_category: 'cafe' | 'restaurant' | 'others';
+          partner_store_category: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
           status: 'pending' | 'approved' | 'rejected';
           selfie_url: string;
           receipt_url: string;
@@ -284,7 +284,7 @@ export type Database = {
         Insert: {
           user_id: string;
           partner_store_name: string;
-          partner_store_category: 'cafe' | 'restaurant' | 'others';
+          partner_store_category: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
           status?: 'pending' | 'approved' | 'rejected';
           selfie_url: string;
           receipt_url: string;
@@ -295,7 +295,7 @@ export type Database = {
         Update: {
           user_id?: string;
           partner_store_name?: string;
-          partner_store_category?: 'cafe' | 'restaurant' | 'others';
+          partner_store_category?: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
           status?: 'pending' | 'approved' | 'rejected';
           selfie_url?: string;
           receipt_url?: string;
@@ -308,7 +308,7 @@ export type Database = {
         Row: {
           id: number;
           name: string;
-          category: 'activity' | 'cafe' | 'restaurant';
+          category: 'activity' | 'cafe' | 'restaurant' | 'bar' | 'hotel';
           required_count: number;
           image_url: string;
           description: string | null;
