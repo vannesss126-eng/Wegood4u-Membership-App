@@ -3,7 +3,7 @@ export interface Submission {
   id: number;
   user_id: string;
   partner_store_name: string;
-  partner_store_category: 'cafe' | 'restaurant' | 'others';
+  partner_store_category: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
   status: 'pending' | 'approved' | 'rejected';
   selfie_url: string;
   receipt_url: string;
@@ -55,6 +55,8 @@ export interface SubmissionStats {
   byCategory: {
     cafe: number;
     restaurant: number;
+    bar: number;
+    hotel: number;
     others: number;
   };
 }
