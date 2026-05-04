@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Wegood4u — Ranks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#FFFFFF;
+    --bg-soft:#F7F8F7;
+    --line:#EAECE9;
+    --line-strong:#D9DDD8;
+
+    --ink:#0E1410;
+    --ink-soft:#5A615C;
+    --ink-mute:#9CA39E;
+
+    --primary:#206E56;
+    --primary-deep:#16513F;
+    --primary-soft:#E8F2EC;
+    --primary-glow:rgba(32,110,86,0.16);
+
+    --star:#E5A93D;
+    --star-deep:#9C6F1A;
+    --star-soft:#FFF4DD;
+
+    /* Tier colors */
+    --bronze:#B07444;
+    --bronze-soft:#F4E4D5;
+    --silver:#9CA8AE;
+    --silver-soft:#EDF1F3;
+    --gold:#D4A02E;
+    --gold-soft:#FFF1C8;
+    --platinum:#5C9DD9;
+    --platinum-soft:#DEEDFB;
+
+    /* Category accent colors */
+    --cat-cafe:#8B6F4E;
+    --cat-cafe-soft:#F2E8DC;
+    --cat-bar:#A0445B;
+    --cat-bar-soft:#F4DBE2;
+    --cat-restaurant:#DC6B45;
+    --cat-restaurant-soft:#FBE3D8;
+    --cat-hotel:#3B7A8A;
+    --cat-hotel-soft:#D5E8EE;
+    --cat-experience:#8B5CB7;
+    --cat-experience-soft:#E5D8F0;
+
+    --sans:"Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+    --r-lg:18px;
+    --r-md:14px;
+    --r-sm:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--sans);color:var(--ink);
+    background:#E5E7E4;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    display:flex;align-items:flex-start;justify-content:center;
+    padding:24px 16px 60px;
+  }
+  .phone{
+    width:100%;max-width:412px;
+    background:var(--bg);
+    border-radius:48px;overflow:hidden;
+    border:1px solid #D8DBD7;
+    box-shadow:0 50px 120px -30px rgba(0,0,0,0.25);
+    position:relative;
+  }
+  .island{
+    position:absolute;top:14px;left:50%;
+    transform:translateX(-50%);
+    width:120px;height:32px;border-radius:99px;
+    background:#000;z-index:10;
+  }
+  .statusbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 28px 12px;font-size:15px;font-weight:600;color:var(--ink);
+  }
+  .statusbar .icons{display:flex;gap:5px;align-items:center;}
+
+  /* Page header */
+  .page-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:20px 24px 14px;
+  }
+  .page-header .left{display:flex;align-items:center;gap:14px;}
+  .back{
+    width:38px;height:38px;border-radius:50%;
+    display:grid;place-items:center;
+    background:var(--bg-soft);border:1px solid var(--line);color:var(--ink);
+    cursor:pointer;
+  }
+  .page-title{
+    font-weight:800;font-size:24px;letter-spacing:-0.02em;margin:0;
+  }
+  .page-sub{
+    font-size:10px;color:var(--ink-mute);
+    letter-spacing:0.16em;text-transform:uppercase;
+    margin-top:2px;font-weight:600;
+  }
+  .star-pill{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:9px 16px;border-radius:99px;
+    background:var(--primary-deep);color:#fff;
+    font-weight:700;font-size:14px;letter-spacing:-0.01em;
+    box-shadow:0 4px 14px -4px rgba(32,110,86,0.4);
+  }
+  .star-pill svg{width:16px;height:16px;color:var(--star);}
+
+  /* Visit Rank hero */
+  .visit-hero{
+    margin:0 16px 18px;border-radius:var(--r-lg);
+    padding:24px 22px 22px;
+    background:linear-gradient(160deg,#F1F8FD 0%,#DEEDFB 100%);
+    border:1px solid #BBD7F0;
+    position:relative;overflow:hidden;
+  }
+  .visit-hero::before{
+    content:"";position:absolute;top:-40px;right:-40px;
+    width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,rgba(92,157,217,0.22),transparent 70%);
+    pointer-events:none;
+  }
+
+  .hero-label-row{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:18px;position:relative;
+  }
+  .hero-label{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:11px;font-weight:700;
+    color:var(--platinum);letter-spacing:0.14em;text-transform:uppercase;
+  }
+  .hero-label::before{
+    content:"";width:6px;height:6px;border-radius:50%;
+    background:var(--platinum);
+    box-shadow:0 0 0 3px rgba(92,157,217,0.2);
+  }
+  .hero-reward-tag{
+    font-size:10px;font-weight:700;
+    background:rgba(255,255,255,0.7);color:var(--ink-soft);
+    padding:5px 11px;border-radius:99px;
+    letter-spacing:0.04em;text-transform:uppercase;
+    border:1px solid var(--line);
+  }
+
+  .hero-body{
+    display:flex;align-items:center;gap:18px;
+  }
+  .hero-art{
+    width:96px;height:96px;flex-shrink:0;border-radius:24px;
+    background:linear-gradient(160deg,#A8D2F0,#5C9DD9);
+    display:grid;place-items:center;
+    box-shadow:0 12px 30px -8px rgba(92,157,217,0.45),0 1px 0 rgba(255,255,255,0.5) inset;
+    position:relative;
+  }
+  .hero-art::before{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(circle at 30% 25%,rgba(255,255,255,0.4),transparent 50%);
+    border-radius:inherit;
+  }
+  .hero-art svg{width:50px;height:50px;color:#fff;position:relative;z-index:1;}
+  .hero-art .level-badge{
+    position:absolute;bottom:-4px;right:-4px;
+    width:30px;height:30px;border-radius:50%;
+    background:#fff;
+    border:2px solid var(--platinum);
+    display:grid;place-items:center;
+    font-size:11px;font-weight:800;color:var(--platinum);
+    box-shadow:0 3px 8px -2px rgba(0,0,0,0.2);
+    z-index:2;
+  }
+
+  .hero-info{flex:1;min-width:0;}
+  .hero-rank-name{
+    font-size:13px;font-weight:700;color:var(--ink-mute);
+    letter-spacing:0.05em;text-transform:uppercase;margin-bottom:3px;
+  }
+  .hero-tier{
+    font-size:24px;font-weight:800;letter-spacing:-0.02em;
+    color:var(--platinum);margin:0 0 2px;
+  }
+  .hero-tier-meta{
+    font-size:12px;color:var(--ink-soft);font-weight:500;margin-bottom:10px;
+  }
+  .hero-progress{
+    height:8px;background:rgba(255,255,255,0.7);
+    border-radius:99px;overflow:hidden;
+    border:1px solid #BBD7F0;position:relative;
+  }
+  .hero-progress-fill{
+    height:100%;width:60%;
+    background:linear-gradient(90deg,var(--platinum),#7AB4E0);
+    border-radius:99px;
+  }
+  .hero-progress-meta{
+    margin-top:6px;font-size:10.5px;
+    color:var(--ink-soft);font-weight:600;letter-spacing:0.02em;
+  }
+  .hero-progress-meta b{color:var(--platinum);font-weight:700;}
+
+  .hero-voucher-row{
+    margin-top:16px;padding-top:14px;
+    border-top:1px dashed #BBD7F0;
+    display:flex;align-items:center;gap:10px;
+  }
+  .hero-voucher-row .gift{
+    width:30px;height:30px;border-radius:50%;
+    background:#fff;border:1px solid #BBD7F0;
+    display:grid;place-items:center;flex-shrink:0;
+  }
+  .hero-voucher-row .gift svg{width:15px;height:15px;color:var(--platinum);}
+  .hero-voucher-row .text{
+    flex:1;font-size:11.5px;color:var(--ink-soft);font-weight:600;line-height:1.4;
+  }
+  .hero-voucher-row .text b{color:var(--ink);font-weight:700;}
+
+  /* Section title */
+  .section{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin:22px 24px 12px;
+  }
+  .section h3{
+    font-size:17px;font-weight:700;letter-spacing:-0.01em;
+    margin:0;color:var(--ink);
+  }
+  .section .hint{
+    font-size:11px;font-weight:500;color:var(--ink-mute);letter-spacing:0.02em;
+  }
+
+  /* Category rank tiles */
+  .ranks{margin:0 16px;display:flex;flex-direction:column;gap:10px;}
+  .rank-tile{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:var(--r-md);
+    padding:14px 16px;
+    display:flex;align-items:center;gap:14px;
+    cursor:pointer;
+    transition:border-color 0.2s ease,transform 0.15s ease;
+  }
+  .rank-tile:hover{transform:translateY(-1px);}
+
+  .rank-tile.cafe:hover{border-color:var(--cat-cafe);}
+  .rank-tile.bar:hover{border-color:var(--cat-bar);}
+  .rank-tile.restaurant:hover{border-color:var(--cat-restaurant);}
+  .rank-tile.hotel:hover{border-color:var(--cat-hotel);}
+  .rank-tile.experience:hover{border-color:var(--cat-experience);}
+
+  .rank-art{
+    width:54px;height:54px;flex-shrink:0;border-radius:14px;
+    display:grid;place-items:center;color:#fff;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,0.3);
+    position:relative;
+  }
+  .rank-art::before{
+    content:"";position:absolute;inset:0;
+    background:radial-gradient(circle at 30% 25%,rgba(255,255,255,0.3),transparent 50%);
+    border-radius:inherit;
+  }
+  .rank-art svg{width:26px;height:26px;position:relative;z-index:1;}
+  .rank-art.cafe{background:linear-gradient(160deg,#B89570,var(--cat-cafe));}
+  .rank-art.bar{background:linear-gradient(160deg,#C26A82,var(--cat-bar));}
+  .rank-art.restaurant{background:linear-gradient(160deg,#EE9275,var(--cat-restaurant));}
+  .rank-art.hotel{background:linear-gradient(160deg,#5DA0B0,var(--cat-hotel));}
+  .rank-art.experience{background:linear-gradient(160deg,#B084D4,var(--cat-experience));}
+  .rank-art .tier-overlay{
+    position:absolute;bottom:-3px;right:-3px;
+    width:22px;height:22px;border-radius:50%;
+    background:#fff;
+    display:grid;place-items:center;
+    font-size:9px;font-weight:800;
+    box-shadow:0 2px 6px -1px rgba(0,0,0,0.2);
+    z-index:2;
+    border:1.5px solid;
+  }
+  .tier-overlay.bronze{color:var(--bronze);border-color:var(--bronze);}
+  .tier-overlay.silver{color:#6B767C;border-color:var(--silver);}
+  .tier-overlay.gold{color:var(--gold-soft);background:var(--gold);border-color:var(--gold);}
+  .tier-overlay.platinum{color:var(--platinum);border-color:var(--platinum);}
+  .tier-overlay.locked{color:var(--ink-mute);border-color:var(--line-strong);}
+
+  .rank-body{flex:1;min-width:0;}
+  .rank-name{
+    font-size:14px;font-weight:700;color:var(--ink);
+    margin:0 0 1px;letter-spacing:-0.005em;
+  }
+  .rank-tier-line{
+    font-size:12px;color:var(--ink-soft);font-weight:600;margin-bottom:7px;
+  }
+  .rank-tier-line .tier-tag{
+    font-weight:700;
+  }
+  .rank-tier-line .tier-tag.bronze{color:var(--bronze);}
+  .rank-tier-line .tier-tag.silver{color:#6B767C;}
+  .rank-tier-line .tier-tag.gold{color:var(--gold);}
+  .rank-tier-line .tier-tag.platinum{color:var(--platinum);}
+  .rank-tier-line .tier-tag.locked{color:var(--ink-mute);}
+
+  .rank-progress-bar{
+    height:6px;background:var(--bg-soft);
+    border-radius:99px;overflow:hidden;
+    border:1px solid var(--line);
+    position:relative;
+  }
+  .rank-progress-fill{
+    height:100%;border-radius:99px;
+  }
+  .rank-progress-fill.cafe{background:linear-gradient(90deg,var(--cat-cafe),#B89570);}
+  .rank-progress-fill.bar{background:linear-gradient(90deg,var(--cat-bar),#C26A82);}
+  .rank-progress-fill.restaurant{background:linear-gradient(90deg,var(--cat-restaurant),#EE9275);}
+  .rank-progress-fill.hotel{background:linear-gradient(90deg,var(--cat-hotel),#5DA0B0);}
+  .rank-progress-fill.experience{background:linear-gradient(90deg,var(--cat-experience),#B084D4);}
+
+  .rank-progress-meta{
+    margin-top:5px;font-size:10.5px;
+    color:var(--ink-mute);font-weight:600;letter-spacing:0.02em;
+    display:flex;justify-content:space-between;
+  }
+  .rank-progress-meta b{color:var(--ink-soft);font-weight:700;}
+
+  .rank-cs-tag{
+    flex-shrink:0;
+    font-size:10px;font-weight:700;
+    color:var(--star-deep);background:var(--star-soft);
+    padding:4px 9px;border-radius:99px;
+    letter-spacing:0.04em;text-transform:uppercase;
+    border:1px solid #F2D177;
+    margin-left:8px;
+  }
+
+  /* Reward note */
+  .reward-note{
+    margin:18px 16px 0;
+    background:linear-gradient(160deg,#FFF6E0,#FCE5A8);
+    border:1px solid #F2D177;
+    border-radius:var(--r-md);
+    padding:14px 16px;
+    display:flex;align-items:center;gap:12px;
+  }
+  .reward-note .icon{
+    width:34px;height:34px;border-radius:50%;
+    background:linear-gradient(160deg,#F8C84F,#E5A93D);
+    display:grid;place-items:center;flex-shrink:0;
+    color:#fff;
+  }
+  .reward-note .icon svg{width:18px;height:18px;}
+  .reward-note .text{flex:1;}
+  .reward-note .text strong{
+    display:block;font-size:13px;font-weight:700;
+    color:var(--star-deep);margin-bottom:2px;
+  }
+  .reward-note .text span{
+    display:block;font-size:11.5px;color:var(--star-deep);
+    line-height:1.45;font-weight:500;
+  }
+
+  .design-note{
+    color:#5d7a6c;font-size:11px;text-align:center;
+    margin-top:18px;font-family:var(--sans);font-weight:500;letter-spacing:0.04em;
+    max-width:412px;line-height:1.6;
+  }
+  .design-note b{color:var(--primary);font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="island"></div>
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><path d="M16 0h-1v11h1V0zM12 2h-1v9h1V2zM8 4H7v7h1V4zM4 6H3v5h1V6zM0 8h-1v3h1V8z" transform="translate(1)"/></svg>
+      <svg width="16" height="11" viewBox="0 0 16 11" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 5a10 10 0 0 1 14 0M3.5 7.5a6 6 0 0 1 9 0M6 10a3 3 0 0 1 4 0"/></svg>
+      <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" stroke="currentColor" fill="none"/><rect x="2" y="2" width="17" height="7" rx="1" fill="currentColor"/><rect x="21.5" y="3.5" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+    </span>
+  </div>
+
+  <div class="page-header">
+    <div class="left">
+      <div class="back">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      </div>
+      <div>
+        <h1 class="page-title">Ranks</h1>
+        <div class="page-sub">Visit · category</div>
+      </div>
+    </div>
+    <div class="star-pill">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 8 22 9 17 14 18 21 12 18 6 21 7 14 2 9 9 8"/></svg>
+      120
+    </div>
+  </div>
+
+  <!-- Visit Rank hero -->
+  <div class="visit-hero">
+    <div class="hero-label-row">
+      <span class="hero-label">Visit Rank</span>
+      <span class="hero-reward-tag">Drives voucher</span>
+    </div>
+    <div class="hero-body">
+      <div class="hero-art">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.6 6.7L22 9.5l-5.5 4.5L18 21l-6-4-6 4 1.5-7L2 9.5l7.4-.8z"/></svg>
+        <div class="level-badge">L1</div>
+      </div>
+      <div class="hero-info">
+        <div class="hero-rank-name">Cumulative cycles</div>
+        <h2 class="hero-tier">Platinum L1</h2>
+        <div class="hero-tier-meta">35 of 40 cycles to Level 2</div>
+        <div class="hero-progress"><div class="hero-progress-fill"></div></div>
+        <div class="hero-progress-meta"><b>5 more</b> cycles to Platinum L2</div>
+      </div>
+    </div>
+    <div class="hero-voucher-row">
+      <div class="gift">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+      </div>
+      <div class="text">Next cycle claim mints a <b>Specialty / 5★ resort + Airbnb voucher</b></div>
+    </div>
+  </div>
+
+  <!-- Per-category Ranks -->
+  <div class="section">
+    <h3>Category Ranks</h3>
+    <span class="hint">based on real visits</span>
+  </div>
+  <div class="ranks">
+    <!-- Cafe — has earned Bronze L2 -->
+    <div class="rank-tile cafe">
+      <div class="rank-art cafe">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+        <div class="tier-overlay bronze">B</div>
+      </div>
+      <div class="rank-body">
+        <div class="rank-name">Cafe Rank</div>
+        <div class="rank-tier-line">Current: <span class="tier-tag bronze">Bronze L2</span> · 14 visits</div>
+        <div class="rank-progress-bar"><div class="rank-progress-fill cafe" style="width:70%;"></div></div>
+        <div class="rank-progress-meta"><span><b>14</b> / 20 visits</span><span>to Bronze L3</span></div>
+      </div>
+      <span class="rank-cs-tag">CS</span>
+    </div>
+
+    <!-- Bar — has earned Silver L1 -->
+    <div class="rank-tile bar">
+      <div class="rank-art bar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 22h8M12 11v11M5 3l7 8 7-8"/></svg>
+        <div class="tier-overlay silver">S</div>
+      </div>
+      <div class="rank-body">
+        <div class="rank-name">Bar Rank</div>
+        <div class="rank-tier-line">Current: <span class="tier-tag silver">Silver L1</span> · 32 visits</div>
+        <div class="rank-progress-bar"><div class="rank-progress-fill bar" style="width:20%;"></div></div>
+        <div class="rank-progress-meta"><span><b>32</b> / 40 visits</span><span>to Silver L2</span></div>
+      </div>
+      <span class="rank-cs-tag">CS</span>
+    </div>
+
+    <!-- Restaurant — has earned Gold L1 -->
+    <div class="rank-tile restaurant">
+      <div class="rank-art restaurant">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18l-2 9H5l-2-9z"/><path d="M5 11V7a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v4"/></svg>
+        <div class="tier-overlay gold">G</div>
+      </div>
+      <div class="rank-body">
+        <div class="rank-name">Restaurant Rank</div>
+        <div class="rank-tier-line">Current: <span class="tier-tag gold">Gold L1</span> · 64 visits</div>
+        <div class="rank-progress-bar"><div class="rank-progress-fill restaurant" style="width:45%;"></div></div>
+        <div class="rank-progress-meta"><span><b>64</b> / 70 visits</span><span>to Gold L2</span></div>
+      </div>
+      <span class="rank-cs-tag">CS</span>
+    </div>
+
+    <!-- Hotel — locked, no rank yet -->
+    <div class="rank-tile hotel">
+      <div class="rank-art hotel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21V12h6v9"/></svg>
+        <div class="tier-overlay locked">—</div>
+      </div>
+      <div class="rank-body">
+        <div class="rank-name">Hotel Rank</div>
+        <div class="rank-tier-line">Current: <span class="tier-tag locked">No rank yet</span> · 2 visits</div>
+        <div class="rank-progress-bar"><div class="rank-progress-fill hotel" style="width:40%;"></div></div>
+        <div class="rank-progress-meta"><span><b>2</b> / 5 visits</span><span>to Bronze L1</span></div>
+      </div>
+      <span class="rank-cs-tag">CS</span>
+    </div>
+
+    <!-- Experience — locked, no rank yet -->
+    <div class="rank-tile experience">
+      <div class="rank-art experience">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+        <div class="tier-overlay locked">—</div>
+      </div>
+      <div class="rank-body">
+        <div class="rank-name">Experience Rank</div>
+        <div class="rank-tier-line">Current: <span class="tier-tag locked">No rank yet</span> · 0 visits</div>
+        <div class="rank-progress-bar"><div class="rank-progress-fill experience" style="width:0%;"></div></div>
+        <div class="rank-progress-meta"><span><b>0</b> / 5 visits</span><span>to Bronze L1</span></div>
+      </div>
+      <span class="rank-cs-tag">CS</span>
+    </div>
+  </div>
+
+  <!-- Reward note -->
+  <div class="reward-note">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 8 22 9 17 14 18 21 12 18 6 21 7 14 2 9 9 8"/></svg>
+    </div>
+    <div class="text">
+      <strong>Category rank rewards — coming soon</strong>
+      <span>Reaching Silver / Gold / Platinum on a category will unlock rewards once vendor sponsorships are signed. Visit Rank vouchers continue normally.</span>
+    </div>
+  </div>
+</div>
+
+<p class="design-note">
+  Wegood4u · Ranks <b>v1 design preview</b><br/>
+  6 ranks total: <b>Visit Rank</b> (drives voucher) + 5 category ranks (rewards "coming soon").<br/>
+  Per-category thresholds: B1=5 / B2=10 / B3=20 / S1=30 / ... / P3=120 visits.<br/>
+  <b>CS</b> tag = Coming Soon (per-category rewards).<br/>
+  Real badge art coming from Kasey's team — these are placeholder gradients.
+</p>
+
+</body>
+</html>
