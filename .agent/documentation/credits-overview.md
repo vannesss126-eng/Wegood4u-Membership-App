@@ -1,217 +1,257 @@
 # Credits System — Overview & Rules
 
-> Source: product discussion with Kasey Fong on 2026-04-21, 2026-04-22, and 2026-04-23 (WhatsApp).
-> Pair with [`referral-system.md`](referral-system.md), [`badge-rewards.md`](badge-rewards.md), and [`architecture-brief.md`](architecture-brief.md).
+> Source: product discussions with Kasey Fong (WhatsApp). Latest lock: **2026-05-04** — daily streak revised to 50 stars / 14 days, voucher rewards upgraded across all tiers, ranks split into 6 separate progressions, no backfill, approvals are final.
+> Pair with [`extra-tasks.md`](extra-tasks.md) (the three star-earning loops), [`referral-system.md`](referral-system.md) (referral tree + qualification), [`badges.md`](badges.md) (6-rank progression model), and [`badge-rewards.md`](badge-rewards.md) (voucher mapping).
 
 ---
 
-## What credits are
-
-**Credits** are the single unit of progress in Wegood4u. They replace the earlier "points" concept entirely — the Lorem ipsum mockup showing "200 Point balance" is dropped.
-
-> "no point" … "we dont have other point system" … "we dont want complicate it" … "we remove the point system, we just use task" — Kasey, 2026-04-21
-
-There is exactly one in-app currency (credits). The flow is:
+## The model in one diagram
 
 ```
-approved submission (R/C/B)  →  +1 credit toward that category's task
-qualified referral           →  +1 credit auto-placed on nearest-complete task
-10 credits in a category     →  1 task completed in that category
-1 task                       →  1 hotel-stay voucher
-N tasks                      →  badge tier (see below)
+  Approved R/C/B visit  ─────────►  +1 to Visit 10 progress
+                                     (real visits — minimum 6 of 10 per cycle)
+                                     +1 to that category's rank counter
+
+  Share / Streak / Referral ────►  Stars in user wallet
+
+       User taps "Use 100 ★ for +1 Progress"
+                                     │
+                          100 stars deducted from wallet
+                                     │
+                                     ▼
+                    +1 to Visit 10 progress (max +4 per cycle)
+
+              Visit 10 progress reaches 10/10
+                                     │
+                          User taps "Complete Tasks"
+                                     │
+                                     ▼
+                    1 voucher minted at user's Visit Rank tier
+                                     │
+                          Cycle resets to 0/10
+                          Star wallet preserved
 ```
+
+---
+
+## Two separate progress concepts
+
+### A. Visit 10 Task — single cumulative reward cycle
+
+- **One** counter, cumulative across **Restaurant + Cafe + Bar** (any mix counts).
+- 10 progress units in a cycle = 1 voucher.
+- **Floor: 6 real visits** must be approved R/C/B submissions in any combination (e.g. 4 cafe + 1 restaurant + 1 bar). The user does **not** need to visit 10 of any single category.
+- **Ceiling: +4 extras** from stars per cycle. User manually trades 100 stars for +1 progress (max 4 trades per cycle). Star wallet retains leftover after each trade.
+- Reward claim is **manual**: at 10/10, a "Complete Tasks" button mints 1 voucher, resets the counter to 0/10, and re-evaluates the Visit Rank if a tier threshold was crossed.
+- The Visit 10 cycle drives **Visit Rank** (the user-facing rank that gates voucher reward kind). See [`badges.md`](badges.md).
+
+> *"i was thinking, our rewards based on 10 visit (6 from physical shop, 4 from task -optional). doesnt require for 10 restaurant or 10 bar or 10 cafe. 6 physical shop can be 4 cafe, 1 restaurant, 1 bar"* — Kasey, 2026-05-03
+> *"once they complete the task, they press complete task, then they will get voucher in rewards tab"* — Kasey, 2026-05-03
+> *"10 visit task can be repeat after each cycle"* — Kasey, 2026-05-04
+
+### B. Per-category Ranks — drive per-category badges
+
+Each approved submission also increments that category's per-category rank counter. Five separate ranks: **Cafe / Bar / Restaurant / Hotel / Experience**.
+
+- Rank counters track **real approved submissions only** — extras (referral / share / streak) **never** move them.
+- Rank progression: Bronze L1 (5) → Bronze L2 (10) → Bronze L3 (20) → Silver L1 (30) → … → Platinum L3 (120). Full table in [`badges.md`](badges.md).
+- Per-category rank rewards are **future** ("coming soon" — vendor sponsorship pending). Rank UI ships in v1; rewards wire up later.
+
+> *"this rank is for 10 visit rank. and cafe have its own rank"* — Kasey, 2026-05-04
+> *"this will be rewards later, once i got sponsorship from vendors"* — Kasey, 2026-05-04
+> *"the badges only apply those who really visit the cafe, restaurant and bar"* — Kasey, 2026-05-03
+
+---
+
+## Stars and the +4 cap
+
+**Stars** are the unit earned by extra tasks. They are **not** earned by visits.
+
+| Conversion | Rule |
+|---|---|
+| 100 stars | = +1 Visit 10 progress (manual trade — user taps button) |
+| Per-cycle cap | At most 4 extras may apply to one cycle |
+| Beyond cap | The "Trade 100 ★" button disables once cycle has 4 extras applied. Stars stay in the wallet for the next cycle. |
+| Leftover stars at cycle close | Carry forward — wallet is not reset on claim |
+
+Star sources and rates documented in [`extra-tasks.md`](extra-tasks.md). Summary:
+
+| Source | Stars |
+|---|---|
+| Share approved submission to Facebook | +15 |
+| Share approved submission to Instagram | +15 |
+| Share approved submission to TikTok | +15 |
+| Bonus: all 3 platforms shared for the same submission | +5 |
+| L1 referral qualifies | +100 |
+| L2 referral qualifies | +50 |
+| Daily log-in 14-day streak completion | **+50** (revised 2026-05-04 from 100) |
+
+All four categories (R/C/B/Hotel) are eligible for share stars. Hotel-derived share stars feed the same wallet that can be traded into the R/C/B Visit 10 cycle.
+
+> *"14 days = 50 star"* — Kasey, 2026-05-04 (revised down from earlier 100; reasoning: low-effort activity warrants smaller reward)
 
 ---
 
 ## Eligible categories
 
-Only **Restaurant, Cafe, Bar** participate in the credits/task system — they earn credits from approved submissions and receive referral auto-placements. Each has its own per-category task counter (e.g. `Bar Bronze Exploration · 5 of 10`).
+| Category | Earns Visit 10 progress from real submission? | Earns share stars? | Has per-category rank? |
+|---|---|---|---|
+| Restaurant | Yes (+1) | Yes (15/15/15+5) | Yes |
+| Cafe | Yes (+1) | Yes | Yes |
+| Bar | Yes (+1) | Yes | Yes |
+| Hotel | **No** — separate "bigger claims" track (TBD) | **Yes** (stars feed R/C/B Visit 10 wallet) | Yes |
+| Experience | No — separate track, not specified | No | Yes |
 
-**Hotel** still appears on the My Tasks tracker with a simple approved-submission counter (for visibility/engagement), but Hotel submissions do **not** earn credits, and referral credits never auto-place on Hotel. Hotel is excluded from badge tier task counts.
-
-**Experience** does not appear in the credits/task system. It follows the separate "bigger claims" reward path that hasn't been specified yet.
-
-> "restaurant cafe and bar only" … "hotel and experience will fall into other categories" … "hotel will reward bigger claims" — Kasey, 2026-04-22
->
-> Hotel shown-but-excluded on My Tasks confirmed 2026-04-23.
+> Hotel sharing extension confirmed Kasey 2026-05-03: *"All can"*.
 
 ---
 
-## Earning credits
+## Cycle close + reward claim
 
-| Event | Credit delta | Where it applies |
+1. Active cycle's progress reaches 10/10 (any combination of ≥6 real visits + ≤4 extras).
+2. UI shows a primary **"Complete Tasks"** button on the Visit 10 card.
+3. User taps → 1 voucher of the user's **current Visit Rank tier** is minted into the Rewards subtab.
+4. Cycle counter resets to 0/10. Star wallet retains any leftover stars.
+5. Visit Rank is re-evaluated against cumulative completed cycles — may award a Silver / Gold / Platinum badge if a threshold was just crossed.
+
+The claim is **manual** — vouchers do not auto-mint at 10/10. This avoids surprising users mid-flow and lets them see the milestone before consuming it.
+
+---
+
+## Approvals are final
+
+> *"for approved submission we wouldn't able to redo the approval. So can't reject"* — Kasey, 2026-05-04
+
+Once an admin approves a submission, the status is locked. There is **no path** to revert approved → rejected. This removes a whole class of edge cases:
+
+- No claw-back of share-stars earned from the approved submission
+- No revocation of the +1 Visit 10 progress
+- No cancellation of vouchers minted by cycles that included the now-questionable visit
+- No rollback of rank tier badges earned
+
+If admin needs to remove a submission entirely (e.g. legal / abuse), the submission row is deleted; downstream awards stay intact (treated as detached history).
+
+---
+
+## Day-one launch — no backfill
+
+> *"No, all verified members can immediately began their daily checkin tasks"* — Kasey, 2026-05-04
+
+When the new model ships:
+
+- Existing approved R/C/B submissions **do not** retroactively count toward any user's first Visit 10 cycle. Everyone starts at `0/10`.
+- Existing approved submissions **do** count toward the new per-category rank counters (so a user with 6 prior cafe approvals starts at Cafe Rank Bronze L1 = 5 visits, with 1 toward Bronze L2).
+- Daily check-in is open to all verified members from day 1 — no approved-submission pre-requirement.
+
+---
+
+## Visit Rank tiers
+
+Visit Rank is the user-facing tier that gates voucher kind on cycle claim. Driven by **cumulative completed Visit 10 cycles** (5 / 15 / 35 thresholds for Silver / Gold / Platinum, with L1/L2/L3 sub-thresholds within each tier).
+
+**Full table + reference TypeScript in [`badges.md`](badges.md).**
+
+| Tier | Cumulative completed cycles | Voucher kind on next cycle close |
 |---|---|---|
-| Approved submission in Restaurant / Cafe / Bar | +1 | Numerator of that same category's task (e.g. cafe `4/10` → `5/10`) |
-| Level 1 referral qualifies | +1 to inviter | **Auto-placed** on the inviter's nearest-complete category task as **+1 numerator** (e.g. bar `5/10` → `6/10`). Displayed on the progress bar as a **gold-coloured tick**, and beside the approved count as `(+1)`. Also +1 to the invitee per [`referral-system.md`](referral-system.md). |
-| Level 2 referral qualifies | +0.5 to top-level affiliate | Accumulates. Every **2** qualified Level 2 events = 1 full credit, then auto-placed using the same nearest-complete rule (again as +1 numerator / gold tick). |
-| Approved submission in Hotel | +1 on Hotel's visibility counter only | No credit toward task completion, no referral bonus, no badge tier contribution. Shown on My Tasks for engagement. |
-| Approved submission in Experience | 0 | Experience is on the separate "bigger claims" track and not surfaced in My Tasks. |
+| Bronze | 1–4 | 3-star or equivalent Airbnb voucher |
+| Silver | 5–14 | 3–4 star hotel or equivalent Airbnb voucher |
+| Gold | 15–34 | 4–5 star hotel or equivalent Airbnb voucher |
+| Platinum | 35+ | Specialty / 5-star / Resort and Airbnb equivalent voucher |
 
-Qualification (for both Level 1 and Level 2) = invitee is verified **and** has at least one approved submission, per [`referral-system.md`](referral-system.md).
-
-### Level 2 example
-> "A refer B and C. B refer D, A get 0.5. B refer E, get 0.5. Must have 2 people only rewards 1 credit." — Kasey
-
-- A invites B and C (Level 1).
-- B invites D → A accumulates 0.5.
-- B invites E → A accumulates another 0.5 → A's pair completes → +1 credit auto-placed.
-
-Level 2 is **even-count only** — a single 0.5 sits in the accumulator until paired.
-
-This supersedes the "Level 2 is display-only" line in [`referral-system.md`](referral-system.md) — that doc should be updated when the credit ledger is built.
+Voucher tier is **frozen at mint time** (the user's Visit Rank when they tap Complete Tasks). Future tier-ups don't retroactively upgrade earlier vouchers. Full mapping + storage shape in [`badge-rewards.md`](badge-rewards.md).
 
 ---
 
-## Referral auto-placement rules
+## UI surfaces
 
-When a referral credit is awarded (Level 1, or a completed Level 2 pair), the system **automatically** applies it to one of the user's eligible-category tasks as a **+1 numerator increment** (gold tick). Users do **not** choose where the credit lands.
-
-> "cannot assign . it will make our progress heavy" — Kasey, 2026-04-22 (rejecting the idea of letting users assign credits to a chosen category)
-
-### Why +1 numerator, not −1 denominator (decided 2026-04-23)
-
-Originally the referral bonus was modelled as a **denominator decrement** (e.g. `5/10` → `5/9`). This created two UI problems:
-1. The tick-mark scale becomes irregular (`0, 2, 4, 6, 8, 9`), confusing to read.
-2. Task completion could fire at different totals (9 vs 10) depending on referral history.
-
-Switched to **+1 numerator increment**: the denominator is always `10`, the tick-mark scale stays `0, 2, 4, 6, 8, 10`, and referral bonuses appear as gold ticks filling the bar faster. Task completes cleanly at numerator == 10.
-
-> "so if its +1, we dont need to update the track progress UI, just immediately add one" — user, 2026-04-23
-> "Thats why Im thinking +1 would be better then -1 sir" — Kasey, 2026-04-23
-
-### Placement algorithm
-1. Look at the user's three eligible-category tasks (Restaurant, Cafe, Bar).
-2. Pick the one **nearest to completion** (highest `numerator / 10` ratio).
-3. Add a `+1` row to that category's ledger with `reason ∈ {level1_referral, level2_pair}`.
-
-#### Worked example (from chat)
-User has three ongoing tasks:
-
-| Category | Progress |
+| Surface | What it shows |
 |---|---|
-| Cafe | 4/10 |
-| Bar | 5/10 ← closest |
-| Restaurant | 1/10 |
+| **Tasks tab → My Task subtab** | "Submit 10 Proof of Travels" card with `6 (+2) / 10` notation, 0-2-4-6-8-10 tick scale, extras zone tinted amber. **"Use 100 ★ for +1 Progress"** trade button when wallet ≥ 100 and cycle < 4 extras. Star wallet status. Three extra-task tiles. Latest-earned Visit Rank badge card. Last 3 history entries. |
+| **Tasks tab → Submit Proof subtab** | Visit submission form (Date Visit → Partner Store → Receipt → Selfie → Submit). Social Media Share card (link / screenshot + verify) for approved submissions. |
+| **Tasks tab → Rewards subtab** | Star wallet hero. **"Complete Tasks & Claim"** button when active cycle = 10/10. Voucher inventory (claimable + redeemed). Trade button (mirrors My Task subtab for convenience). |
+| **Badge / Ranks page** | Visit Rank tile + 5 per-category rank tiles. Each shows current tier+level + threshold to next level. |
+| **Profile tab** | **Do not display stars or credits here** — Kasey explicitly excluded the profile tab from the progression UI. |
 
-A referral qualifies → bar becomes `6/10`, displayed as `5 (+1) / 10` with a gold tick on the progress bar at position 6.
+### Visit 10 card — example states
 
-### Tie-break order
-When multiple categories share the same closest-to-complete ratio: **Restaurant → Cafe → Bar**.
-
-### Per-category cap (per cycle)
-> "Each categories must only max reduce to 6" … "Means each categories can claim 4 only" … "Per cycle of task of each categories" — Kasey
->
-> "so the maximum add is 4 gold line ya" — Kasey, 2026-04-23
-
-- Each category can receive **at most 4 referral +1 increments per cycle** (i.e. up to 4 gold ticks on the progress bar).
-- At most 4 of the 10 credits needed to complete a cycle can come from referrals; the remaining ≥6 must come from approved submissions.
-- Once a category task completes (numerator reaches 10), a new cycle begins with numerator reset to 0 and the gold-tick counter reset.
-- If the nearest-complete category has already received its 4 gold ticks for this cycle, fall through to the next-closest eligible category by the same tie-break rule.
-
-### Per-invitee constraint
-> "This is for 1st time only ya." … "Means every submission of new user on new successfully approval" — Kasey
-
-Each invitee triggers **exactly one** referral credit for their inviter — on the invitee's first qualifying approved submission. Their subsequent approved submissions don't grant further referral credits.
-
----
-
-## Tasks → Rewards
-
-- **1 completed task = 1 hotel-stay voucher** (claimable in the Rewards subtab).
-  > "1 task = 1 hotel stay" … "yes. hotel voucher" — Kasey
-- Tasks are unlimited — completing one in a category resets that category's counter and starts a new cycle.
-
-### Badge tiers + levels
-
-Tier and level are a single global value per user, derived from cumulative completed tasks across Restaurant + Cafe + Bar (Hotel excluded). Tier thresholds are 5 / 15 / 35 tasks for Silver / Gold / Platinum (Bronze covers tasks 1–4); each tier subdivides into 3 levels.
-
-**The full tier+level table, reference TypeScript implementation, reward mapping, asset URL pattern, and trigger wiring all live in [`badges.md`](badges.md).** That document is the source of truth — this file should not duplicate it.
-
-> "1-5 is Bronze / 5-15 is Silver / 15-35 is Gold / 35p onwards is Platinum" — Kasey
-> "5 task completion = 50 successfull approval = level up to Silver" — Kasey
-> "if user completed 4 task = 40 shop, he start a new task, he still in bronze" — Kasey
->
-> L1/L2/L3 sub-thresholds resolved 2026-04-23 — see [`badges.md`](badges.md).
-
-### Hotel "bigger claims" track — TBD
-Hotel (and possibly Experience) don't feed the credits/task loop. Kasey said hotels "reward bigger claims" but didn't specify the mechanism. **Confirm with Kasey before designing this.**
-
----
-
-## Where credits / tasks are surfaced in the UI
-
-| Screen | What to show |
-|---|---|
-| **Tasks tab → My Tasks subtab** | Primary progress surface. Top section: per-category `(numerator / 10)` progress bars for Restaurant, Cafe, Bar (credit-earning) + Hotel (visibility-only). Gold ticks on the progress bar represent referral +1s. Middle section: latest-earned badge card with `→` to full badge page. Bottom section: last 5 history entries with `View All` to full history page. |
-| **Tasks tab → Submit subtab** | Verified-member submit form (Date Visit → Partner Store → Receipt → Selfie → Submit). Replaces the alert with a dedicated "Proof Submitted" screen. |
-| **Tasks tab → Rewards subtab** | Primary home for voucher redemption. Claimable once the user has ≥1 completed task. Design not yet produced — current in-app Rewards page stays as placeholder. |
-| **Badge detail page** (routed from My Tasks badge card `→`) | 4 category sections (R/C/Bar/Hotel), each a horizontal list of tier/level badges. Per-category share CTA launches a Badge Collection share card. |
-| **Profile tab** | **Do NOT show credits here** — Kasey explicitly rejected putting credits in profile. |
-
-### Ongoing-task status bar — example
 ```
-Ongoing Task
-Bar Bronze Exploration   5 (+1) / 10    ← 1 gold tick on progress bar
-Cafe Bronze Exploration  4 / 10
-Restaurant Bronze        1 / 10
-Hotel                    3 / 10         ← counter only, no credits / no referrals
+Submit 10 Proof of Travels       6 (+2) / 10        [Use 100 ★ for +1 Progress]
+Submit 10 Proof of Travels       6 (+4) / 10        [Complete Tasks & Claim]   ← claimable
+Submit 10 Proof of Travels       10 / 10            [Complete Tasks & Claim]   ← claimable, no extras
 ```
-The `(+N)` annotation and gold ticks reflect referral credits auto-placed on that category. Submission count and referral count are surfaced separately so users can see *why* progress moved without them submitting anything.
+
+The `(+N)` annotation reflects star-trades applied to the active cycle (max +4). Visits portion (left) is real R/C/B submissions only.
 
 ### History feed — event types
-
-Per Kasey, 2026-04-23, the History page must cover more than approved submissions:
 
 | Event | Example row |
 |---|---|
 | Approved submission | `{date} • {partner_store} • Approved` |
-| Badge earned | `{date} • Earned Silver Level 1` |
-| Task completed | `{date} • Bar Bronze Exploration completed • +1 voucher` |
-| Reward redeemed | `{date} • Redeemed 3-star hotel voucher` |
+| Share verified | `{date} • Shared {partner_store} on {platform} • +15 ★` |
+| Daily streak milestone | `{date} • 14-day streak completed • +50 ★` |
+| Referral qualified | `{date} • {invitee_name} qualified (L1) • +100 ★` |
+| Stars traded for progress | `{date} • Used 100 ★ for +1 Progress` |
+| Cycle completed | `{date} • Visit 10 Task completed • +1 voucher` |
+| Visit Rank earned | `{date} • Reached {tier} {level}` |
+| Per-category rank earned | `{date} • Cafe Rank — Silver L1` |
+| Voucher redeemed | `{date} • Redeemed {reward_kind}` |
 
-> "History not only approved submission but also badge updates, track progress complete, and reward used" — user, 2026-04-23
-> "Yes" — Kasey, 2026-04-23
-
-The latest 5 events surface on the My Tasks subtab; the full paginated feed lives on the standalone History page.
+Latest 3 surface on My Task; full feed on the History page. See [`history-feed.md`](history-feed.md).
 
 ---
 
-## Resolved questions (as of 2026-04-22)
+## Storage model
 
-| # | Question | Answer |
-|---|---|---|
-| 1 | Does referral give a credit, or reduce task minimum? | **Credit.** A referral manifests as **+1 numerator** on the nearest-complete category task (denominator stays fixed at 10). Displayed as a gold tick on the progress bar. Switched from −1 denominator on 2026-04-23 to keep the tick scale at `0, 2, 4, 6, 8, 10`. |
-| 2 | Level 2 fractional handling | Accumulate 0.5 events; every pair = 1 full credit. Even count required. |
-| 3 | Per-category vs global tasks | **Per-category.** Three concurrent credit-earning tasks (Restaurant, Cafe, Bar) plus Hotel as a visibility-only counter. Denominator fixed at 10. |
-| 4 | Fractional credits in storage | **Store as integers.** Level 2 0.5s live in a small accumulator (or a `pending_half_credits` counter); only commit to the ledger as integer +1 when the pair completes. |
-| 5 | Voucher caps / expiry | Skipped — no vouchers are wired up yet. Revisit when redemption is built. |
-| 6 | Badge tier thresholds | **5 / 15 / 35** tasks for Silver / Gold / Platinum (updated 2026-04-23 from 5/15/25). Bronze is default. |
-| 7 | Hotel on My Tasks | Shown with approved-submission counter; does not earn credits, is not a referral auto-placement target, does not contribute to badge tier. |
-| 8 | L1/L2/L3 sub-level thresholds | Resolved 2026-04-23. Single global tier+level per user, derived from cumulative R/C/B task count. Full table + reference impl in [`badges.md`](badges.md). Same value mirrored across all 4 category rows on the badge detail page. |
+> Implementation notes — finalize during build phase.
+
+- **`star_wallet`** (per user): integer balance.
+  - Columns: `(user_id, balance, updated_at)`.
+  - Trade button enabled when `balance >= 100 AND active cycle has < 4 extras`.
+- **`star_ledger`** (per event): every star award and every trade-to-progress event.
+  - Columns: `(user_id, delta_stars, reason, source_id, source_type, created_at)`.
+  - `reason` ∈ `{ share_facebook, share_instagram, share_tiktok, share_all_three_bonus, daily_streak_14, l1_referral, l2_referral, conversion_to_progress }`.
+- **`visit_progress`** (per active cycle): the user's current Visit 10 cycle.
+  - Columns: `(user_id, cycle_id, real_visits, extras_applied, opened_at, closed_at)`.
+  - `real_visits + extras_applied = 10` triggers the claim-eligible state. Cycle closes on Complete Tasks tap, not automatically.
+- **`submission_shares`**: one row per (submission, platform) verified share. Unique key on `(submission_id, platform)`.
+- **`daily_checkins`**: audit table; one row per (user, KL-day). Uniqueness on `(user_id, checkin_date)`. KL = `Asia/Kuala_Lumpur` per Kasey.
+- **`vouchers`**: minted on cycle close. Tier is snapshotted at mint time. Schema sketch in [`badge-rewards.md`](badge-rewards.md).
+
+Per-category rank counts are derived: `SELECT count(*) FROM submissions WHERE user_id = ? AND status = 'approved' AND category = ?`. No separate table needed.
+
+Visit Rank is derived from completed-cycle count. No separate table needed.
+
+Approvals are final → no `claw-back` table or revocation logic required.
+
+---
+
+## Resolved questions
+
+| # | Question | Answer | Locked |
+|---|---|---|---|
+| 1 | Per-category cycles or one cumulative cycle? | One cumulative cycle across R/C/B. 6-visit floor, +4 extras ceiling. | 2026-05-03 |
+| 2 | What unit do extras use? | **Stars.** 100 stars = +1 progress (manual trade). Cap +4 per cycle. | 2026-05-03 |
+| 3 | Do visits earn stars? | No. Stars come only from extra tasks. Visits earn Visit 10 progress directly. | 2026-05-03 |
+| 4 | Auto-claim or manual claim? | **Manual.** "Complete Tasks" button at 10/10 mints the voucher. | 2026-05-03 |
+| 5 | What drives Visit Rank? | Cumulative **completed cycles** (5 / 15 / 35). Same model as before, applied to the new unified cycle. | 2026-05-03 |
+| 6 | Are per-category counters affected by extras? | No. They track real submissions only — used on the Ranks page. | 2026-05-03 |
+| 7 | Can Hotel submissions be shared for stars? | Yes. Hotel itself stays excluded from Visit 10 cycle progress. | 2026-05-03 |
+| 8 | L1 / L2 referral star values | L1 = 100 stars, L2 = 50 stars. Two L2 = 100 stars = +1 progress. | 2026-05-03 |
+| 9 | Daily streak length / reward | **14 consecutive days = 50 stars.** Single payout at milestone, recurring. KL TZ. | 2026-05-04 |
+| 10 | Share star rates per platform | 15 / 15 / 15 + 5 bonus (FB / IG / TikTok / all-three-bonus). Max 50 per approved submission. | 2026-05-03 |
+| 11 | Per-category rank model | 6 ranks total (Visit + 5 category). Per-category thresholds B1=5, B2=10, B3=20, S1=30, S2=40, S3=50, G1=60, G2=70, G3=80, P1=90, P2=100, P3=120. | 2026-05-04 |
+| 12 | Per-category rank rewards | "Coming soon" — vendor sponsorship pending. Rank UI ships in v1; rewards wire up later. | 2026-05-04 |
+| 13 | Voucher reward kinds | Bronze = 3-star/Airbnb; Silver = 3–4 star hotel/Airbnb; Gold = 4–5 star hotel/Airbnb; Platinum = Specialty/5-star/resort + Airbnb equivalent. | 2026-05-04 |
+| 14 | Backfill on launch day? | **No.** Verified members start fresh (Visit 10 = 0/10). Existing approved submissions DO carry into per-category rank counters. | 2026-05-04 |
+| 15 | Claw-back when admin reverses approval? | **N/A** — admin cannot reverse an approval. Once approved, locked. | 2026-05-04 |
+| 16 | Daily check-in eligibility | All verified members from day 1. No approved-submission pre-requirement. | 2026-05-04 |
+| 17 | Daily check-in activity gate | v1: just check-in button. v2: blog/video viewing + foreground time tracking (deferred). | 2026-05-04 |
+| 18 | Day boundary timezone | `Asia/Kuala_Lumpur` (= MY time). | 2026-05-04 |
 
 ---
 
 ## Still open
 
-- **Hotel reward mechanic** — Hotel now has a visibility counter on My Tasks, but no reward path has been specified. Kasey referenced "bigger claims" but didn't define what a Hotel visit unlocks.
-- **Experience category** — only mentioned in passing as "falls into other categories." Confirm whether it follows hotel's path or is its own thing.
-- **Tie-break beyond Restaurant > Cafe > Bar** — what if all three are tied AND Restaurant has already received 4 gold ticks this cycle? Assume cascade Cafe → Bar, but confirm.
-- **Cycle reset semantics** — when a task completes (numerator = 10), does the new cycle start at `0/10` or could leftover approved submissions roll over? Assume reset to `0/10` and gold-tick counter also resets.
-- **Update to [`referral-system.md`](referral-system.md)** — the Level 2 = 0.5-credit rule and the +1-numerator auto-placement mechanic both override what's currently written there. That doc should be revised (not this one) when the credit ledger lands.
-
----
-
-## Implementation notes (when ready to build)
-
-- Derive the user's per-category task progress from a `credits_ledger` table:
-  - `(user_id, category, delta_numerator, reason, source_submission_id, source_referral_id, cycle_id, created_at)`
-  - `reason` ∈ `{ approved_submission, level1_referral, level2_pair }`
-  - All rows: `delta_numerator = +1`. Denominator is the constant `10` and is not stored per row.
-  - Direct approvals: `reason = 'approved_submission'`, `source_submission_id` set.
-  - Referrals: `reason = 'level1_referral'` or `'level2_pair'`, `source_referral_id` set, `category` set by the placement algorithm at write-time.
-- Level 2 half-credits live outside the ledger in a small `referral_half_credit_accumulator(user_id, count)` table or column. When `count` becomes even, write a `level2_pair` ledger row and decrement `count` by 2.
-- A category's current numerator for the active cycle = `SUM(delta_numerator)` with matching `cycle_id`. The submission-vs-referral split for UI `5 (+1) / 10` display comes from filtering by `reason`. Once `numerator >= 10`, the cycle closes: increment task count, mint 1 voucher (or queue it), open a new cycle.
-- Task count = sum of completed cycles across **R/C/B only** (Hotel excluded). Don't store separately — derive.
-- Badge tier = `tier_from_task_count(task_count)` with the **5/15/35** thresholds. Derive.
-- Per-cycle 4-referral cap is enforced at write-time by the placement algorithm: count existing rows with `reason IN ('level1_referral','level2_pair')` in the active cycle for that category; if already 4, skip to next category in the tie-break order.
-- History page events pull from multiple sources: `submissions` (approved), `user_badges` (earned_at), completed `cycle_id` rows in `credits_ledger`, and the future voucher-redemption table. A unified `user_activity` view/feed is the simplest rendering path.
+- **Hotel "bigger claims" reward path** — Kasey referenced larger Hotel-only rewards but never specified mechanism. Hotel still has a per-category rank counter and earns share-stars, but its own dedicated reward track is undefined.
+- **Final hashtag list** for share verification — Kasey: *"I send you the hashtag later"*.
+- **Voucher inventory sourcing** — partner integration (Airbnb, hotel chains) vs honor-system codes, TBD before redemption ships.

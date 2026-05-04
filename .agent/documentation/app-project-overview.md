@@ -39,7 +39,7 @@ Members can log "visits" to partner establishments (Cafe, Restaurant, Bar, Hotel
 *   **Review Queue:** Submissions stay `pending` until an `admin` approves or rejects them. 
 
 ### 2.3 Gamification & Badge System
-The app is mid-transition from a submission-count model to a credits/tasks model. Both are documented here honestly so devs know the difference.
+The app is mid-transition from a submission-count model to a stars + Visit 10 cycle model. Both are documented here honestly so devs know the difference.
 
 **Current code (source of truth: [`badges.md`](badges.md)):**
 *   **Categories:** Bar Explorer, Coffee Lover, Foodie, Hotel Explorer.
@@ -48,12 +48,17 @@ The app is mid-transition from a submission-count model to a credits/tasks model
 *   **Asset Storage:** Badge image URLs pulled dynamically from the Supabase Storage public bucket.
 *   Known issue: Bar and Hotel badges are currently unreachable (schema enum gap).
 
-**Target model (source of truth: [`credits-overview.md`](credits-overview.md), [`badge-rewards.md`](badge-rewards.md), locked 2026-04-23, **not yet implemented**):**
-*   **Eligible categories:** Restaurant, Cafe, Bar earn credits. Hotel shown as visibility counter only. Experience off-system.
-*   **Progress unit:** 10 credits per cycle = 1 task. Tasks are unlimited — each completion starts a new cycle.
-*   **Tiers:** Bronze (default) / Silver (5 tasks) / Gold (15 tasks) / Platinum (35+ tasks), cumulative across R/C/B.
-*   **Rewards per tier:** Bronze = Airbnb, Silver = 3★, Gold = 4★, Platinum = specialty/5★/resort voucher.
-*   **Referral effect:** qualifying referral = +1 numerator on recipient's nearest-complete task (gold tick on 0/2/4/6/8/10 progress bar), max 4 per category per cycle.
+**Target model (source of truth: [`credits-overview.md`](credits-overview.md), [`extra-tasks.md`](extra-tasks.md), [`badges.md`](badges.md), [`badge-rewards.md`](badge-rewards.md), locked 2026-05-04, **not yet implemented**):**
+*   **Single cumulative Visit 10 cycle:** one counter across Restaurant + Cafe + Bar (any mix). 10 progress = 1 voucher. Floor of 6 real visits per cycle. Hotel is a separate "bigger claims" track (TBD); Experience is off-system.
+*   **Stars** are the unit earned by extra tasks. **Manual trade: user taps "Use 100 ★ for +1 Progress"** on the Visit 10 card. Cycle accepts a maximum of **+4 trades**; leftover stars stay in wallet.
+*   **Three extra tasks** earn stars: Social Media Share (15 / 15 / 15 + 5 bonus per approved submission across Facebook / Instagram / TikTok / all-three), Daily Log-In Streak (**50 stars per 14-day streak**, recurring, KL TZ, open to all verified members), Referral (L1 = 100 stars, L2 = 50 stars per qualified invitee).
+*   **Manual claim:** at 10/10, user taps a "Complete Tasks" button to mint the voucher; cycle resets to 0/10.
+*   **Six ranks total:**
+    - **Visit Rank** — driven by completed cycles (1–4 / 5–14 / 15–34 / 35+ for Bronze/Silver/Gold/Platinum). Drives voucher kind on cycle claim.
+    - **Cafe / Bar / Restaurant / Hotel / Experience Ranks** — each driven by real approved submissions in that category. Thresholds: B1=5, B2=10, B3=20, S1=30, S2=40, S3=50, G1=60, G2=70, G3=80, P1=90, P2=100, P3=120. Per-category rewards are **"coming soon"** (vendor sponsorship pending).
+*   **Voucher kinds (Visit Rank tier):** Bronze = 3-star/Airbnb; Silver = 3–4 star hotel/Airbnb; Gold = 4–5 star hotel/Airbnb; Platinum = Specialty/5-star/resort + Airbnb equivalent. Tier snapshot at mint.
+*   **Approvals are final** — admin cannot revert approved → rejected. No claw-back logic for stars, progress, vouchers, or rank badges.
+*   **No backfill on launch** — verified members start at 0/10 Visit 10 progress. Existing approved submissions DO carry into per-category rank counters.
 
 ### 2.4 Activity History
 Unified, paginated activity feed surfaced as the **History** snippet on My Tasks and the standalone **/tasks/history** page. Backed by a `SECURITY DEFINER` Postgres RPC (`get_user_activity`) that UNIONs submissions, badges, completed cycles, and redeemed vouchers into one chronological list. Full spec in [`history-feed.md`](history-feed.md).
@@ -62,8 +67,8 @@ Unified, paginated activity feed surfaced as the **History** snippet on My Tasks
 Tracks relationships via an `inviter_id` field in the user profile. Full rules in [`referral-system.md`](referral-system.md).
 *   Affiliates can distribute unique generated codes.
 *   The system records direct (Level 1) and indirect (Level 2) referrals via recursive SQL Views (`referral_tree`).
-*   Qualifying event = invitee verified **and** first submission approved. Triggers the 1+1 credit split (invitee + direct inviter) per [`credits-overview.md`](credits-overview.md) auto-placement rules.
-*   Level 2 qualifications contribute +0.5 to the top-level affiliate; every pair settles as +1 credit (also auto-placed).
+*   Qualifying event = invitee verified **and** first submission approved. On qualification: **+100 stars** to the invitee, **+100 stars** to the L1 inviter, **+50 stars** to the L2 affiliate (if any).
+*   Stars feed the same wallet used by Social Media Share and Daily Log-In Streak. 100 stars auto-converts to +1 Visit 10 progress (capped at +4 per cycle, leftover carries forward). Full mechanic in [`credits-overview.md`](credits-overview.md) and [`extra-tasks.md`](extra-tasks.md).
 
 ---
 
@@ -80,7 +85,16 @@ The entire application state runs securely using Supabase Row Level Security (RL
 ### Automated Triggers
 - **`handle_new_user`**: Creates a new profile immediately when Supabase Auth completes signup.
 - **`increment_invitation_usage`**: Updates the parent's code usage count automatically when a new sub-user is attached.
-- **`check_and_award_badges`**: Triggers upon a submission going `approved`, counting the total approved visits, and automatically inserting unlocked badges into `user_badges`.
+- **`check_and_award_badges`**: Legacy. Triggered on submission `approved`, counting per-category submissions and inserting unlocked badges. Will be replaced under the new model — tier badges mint only on Visit 10 cycle close, not on every approved submission. See [`badges.md`](badges.md) "Trigger wiring."
+
+### Pending tables (locked 2026-05-03, not yet built)
+- **`star_wallet`** — per-user star balance + queued-extras counter for stars converted past the +4 cap.
+- **`star_ledger`** — audit trail of every star award and conversion-to-progress event.
+- **`visit_progress`** — active Visit 10 cycle per user; `closed_at` set on Complete Tasks tap.
+- **`submission_shares`** — verified shares per (submission, platform); unique key on the pair.
+- **`daily_checkins`** — audit table for daily log-ins; one row per (user, KL-day).
+- **`vouchers`** — minted on cycle close; tier snapshotted at mint time.
+Full schemas in [`credits-overview.md`](credits-overview.md) "Storage model."
 
 ---
 
@@ -106,4 +120,4 @@ While Supabase manages structured relational user data, **Firebase** is leverage
 
 ---
 
-*(Last Updated: 2026-04-26 — added section 2.4 (Activity History) and renumbered the affiliate section to 2.5; new doc [`history-feed.md`](history-feed.md). Previous update 2026-04-23 synced sections 2.3 and 2.4 with the locked credits/task model in [`credits-overview.md`](credits-overview.md) and [`badge-rewards.md`](badge-rewards.md).)*
+*(Last Updated: 2026-05-04 — synced section 2.3 (Gamification) with the 6-rank progression model, daily streak revised to 50 stars, voucher kinds upgraded across all tiers, "approvals are final" lock, no-backfill rule. Previous update 2026-05-03 introduced the cumulative Visit 10 cycle and stars model.)*

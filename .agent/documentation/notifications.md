@@ -91,7 +91,13 @@ Hook: `trg_notify_on_submission_status_change` at [migration:933](supabase/migra
 `check_and_award_badges` at [migration:145-207](supabase/migrations/20260417151509_remote_schema.sql#L145-L207) inserts into `user_badges` but does not insert a notification. Earning a badge is silent. See [`badges.md`](badges.md).
 
 ### Referral events — NOT wired
-A qualified referral does not create a notification today. The referral system docs ([`referral-system.md`](referral-system.md)) propose this for future work.
+A qualified referral does not create a notification today. Under the locked star-economy model, qualifying L1/L2 events should fire `referral_qualified` notifications with the star delta. See [`referral-system.md`](referral-system.md).
+
+### Extra-task events — NOT wired
+Share verification, daily streak milestones, and stars-to-progress conversions all need notification wiring. Sources are `submission_shares`, `daily_checkins`, and `star_ledger` respectively. See [`extra-tasks.md`](extra-tasks.md).
+
+### Cycle-close events — NOT wired
+A cycle reaching 10/10 (claim-eligible) and the user tapping Complete Tasks (voucher minted) are both notification-worthy moments. Sources are `visit_progress.closed_at` and `vouchers` insert.
 
 ---
 
@@ -143,11 +149,16 @@ Users can't opt out of any notification type. There's no preferences table or UI
 The hook refetches on mount only. Long sessions on the Notifications screen won't see new arrivals until the user pulls to refresh or remounts. Could be solved with a Supabase Realtime subscription on `notifications WHERE recipient_id = auth.uid()`.
 
 ### Limited notification vocabulary
-Only three actions exist (`submission_created`, `submission_approved`, `submission_rejected`). The credits/task model locked on 2026-04-23 ([`credits-overview.md`](credits-overview.md), [`badge-rewards.md`](badge-rewards.md)) expands this significantly. Future needs:
-- **Badge earned** (e.g. "You reached Silver") — currently silent (see "Badges are silent" above).
-- **Task completed** — a cycle reaching 10 credits mints a voucher; user should know.
-- **Referral qualified** — 1+1 at Level 1, half-credit accumulation at Level 2. Show the gold-tick landing: "Bonus 1 Credit for Restaurant."
-- **Voucher claimable / redeemed** — pairs with the Rewards subtab.
 
-The History page on the Tasks tab (per [`credits-overview.md`](credits-overview.md) "History feed — event types") will render the same event vocabulary from a separate feed query; the notifications system should share the event taxonomy so both surfaces stay in sync.
-- Account-level events (password change confirmation, deletion grace period if added, etc.)
+Only three actions exist (`submission_created`, `submission_approved`, `submission_rejected`). The credits + extra-tasks model locked on 2026-05-03 ([`credits-overview.md`](credits-overview.md), [`extra-tasks.md`](extra-tasks.md), [`badge-rewards.md`](badge-rewards.md)) expands this significantly. Future needs:
+
+- **Share verified** — a social-media share passed AI verification; e.g. *"+15 stars for your Instagram post."*
+- **Daily streak milestone** — 14-day streak completed; e.g. *"+100 stars — your streak hit 14 days!"*
+- **Referral qualified** — L1 = +100 stars, L2 = +50 stars; e.g. *"{name} qualified — +100 stars."*
+- **Stars converted to progress** — wallet hit 100, +1 progress applied; e.g. *"+1 progress applied to your Visit 10 Task."* (Optional — may be too noisy.)
+- **Cycle complete (claimable)** — Visit 10 reached 10/10; user must tap Complete Tasks to mint the voucher; e.g. *"Your Visit 10 Task is ready to claim."*
+- **Badge earned** — tier crossing on cycle close; e.g. *"You reached Silver Level 1."* — currently silent (see "Badges are silent" above).
+- **Voucher claimable / redeemed** — pairs with the Rewards subtab.
+- **Account-level events** — password change confirmation, deletion grace period if added, etc.
+
+The History page on the Tasks tab ([`history-feed.md`](history-feed.md)) renders the same event vocabulary from a separate feed query; the notifications system should share the event taxonomy so both surfaces stay in sync.

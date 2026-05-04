@@ -1,35 +1,37 @@
-![alt text](image.png)# Referral System — Two-Level Tree + Qualification Rules
-> Context doc for the Invite Friends / Referrals feature. Pair with [`architecture-brief.md`](architecture-brief.md), [`credits-overview.md`](credits-overview.md), and [`badge-rewards.md`](badge-rewards.md).
->
-> **Scope note:** this doc owns the *tree + qualification* logic. The *credit award mechanic* (auto-placement, +1 numerator, 4-tick cap, Level 2 half-credit accumulator) is defined in [`credits-overview.md`](credits-overview.md) and supersedes anything older in this file.
+# Referral System — Two-Level Tree + Qualification Rules
+
+> Owns the *tree + qualification* logic for the Invite Friends / Referrals feature.
+> Award mechanic (stars → Visit 10 progress) is owned by [`credits-overview.md`](credits-overview.md) and [`extra-tasks.md`](extra-tasks.md). This doc describes when a referral fires; those docs describe what it earns.
+> Pair with [`architecture-brief.md`](architecture-brief.md), [`credits-overview.md`](credits-overview.md), [`extra-tasks.md`](extra-tasks.md), and [`badge-rewards.md`](badge-rewards.md).
 
 ---
 
 ## What this feature does
+
 Each user (affiliate) can invite friends. Those invites form a **two-level tree**:
 
 - **Level 1** — people the affiliate directly invited
 - **Level 2** — people that Level 1 users invited
 
-The affiliate can see both levels in the "Referrals" tab of the Invite Friends screen. Level 1 users are shown as top-level rows; expanding a row reveals their Level 2 invitees nested underneath.
+The affiliate sees both levels in the "Referrals" tab of the Invite Friends screen. Level 1 users are top-level rows; expanding a row reveals their Level 2 invitees nested underneath.
 
-### Referral count is unlimited (locked 2026-04-23)
+### Referral count is unlimited
 
-There is **no cap** on how many people a single affiliate can refer. An affiliate can have an arbitrary number of Level 1 referrals and arbitrary Level 2 nesting underneath each. The same `invitation_codes.code` is reused for every invite — there is no per-code usage limit, no per-day rate limit, and no concept of "deleting" a referral to free up a slot.
+There is **no cap** on how many people a single affiliate can refer. Same `invitation_codes.code` is reused for every invite — no per-code usage limit, no per-day rate limit, no concept of "deleting" a referral to free up a slot.
 
-> "i dont think it should limit to 7 referral only" … "it should be unlimited" … "Unlimited ya" — Kasey, 2026-04-23
+> *"i dont think it should limit to 7 referral only" … "it should be unlimited" … "Unlimited ya"* — Kasey, 2026-04-23
 
-This rejects an earlier proposal to cap referrals at 7 with a "delete inactive referral" feature to free slots. **Do not introduce that cap or delete-referral feature** — they were explicitly rejected.
+This rejected an earlier proposal to cap referrals at 7 with a "delete inactive referral" feature. **Do not introduce that cap or feature** — they were explicitly rejected.
 
-**Don't confuse this with the per-cycle cap in [`credits-overview.md`](credits-overview.md):** an affiliate can earn at most 4 referral *gold ticks* per category per cycle (so at most 4 of the 10 credits per cycle come from referrals). That's a per-cycle credit-economics cap, not a referral-count cap. There's no upper bound on the number of qualified referrals an affiliate can accumulate over time — referral credits beyond the 4-tick cap simply auto-place onto the next-closest category, or wait for the next cycle once all three categories are capped.
+**Don't confuse this with the per-cycle +4 cap in [`credits-overview.md`](credits-overview.md):** an affiliate can convert at most 4 stars-derived increments into a single Visit 10 cycle. That's a per-cycle cap on the conversion, not a referral-count cap. Stars beyond the 4-cap simply queue and apply to the next cycle. Qualified referrals continue to earn stars indefinitely.
 
 ### Implementation invariants — keep these true
 
 | Place | Today | Rule |
 |---|---|---|
-| `invitation_codes` table | has `usage_count` (counter), `is_active`, `code`. No `max_uses` column. | **Do not add** `max_uses` or any cap column. |
+| `invitation_codes` table | has `usage_count`, `is_active`, `code`. No `max_uses`. | **Do not add** `max_uses` or any cap column. |
 | Trigger that bumps `usage_count` ([migration:270-282](supabase/migrations/20260417151509_remote_schema.sql#L270-L282)) | unconditional `usage_count = usage_count + 1` | **Do not add** a `WHERE usage_count < N` guard. |
-| `useReferrals` hook ([hooks/useReferrals.ts](hooks/useReferrals.ts)) | returns all rows from `referral_tree` | **Do not add** `.slice(0, N)` or pagination caps. The tree shows everyone. |
+| `useReferrals` hook ([hooks/useReferrals.ts](hooks/useReferrals.ts)) | returns all rows from `referral_tree` | **Do not add** `.slice(0, N)` or pagination caps. |
 | Referrals UI ([components/invite-friends/referrals.tsx](components/invite-friends/referrals.tsx)) | renders every Level 1 row | **Do not add** a list cap. |
 | RLS on `invitation_codes` | inserts gated by role, no count check | Don't add a count check. |
 
@@ -38,94 +40,104 @@ This rejects an earlier proposal to cap referrals at 7 with a "delete inactive r
 ## Current implementation (as of 2026-04-21)
 
 ### Data model
+
 | Table / View | Column | Purpose |
 |---|---|---|
 | `profiles` | `inviter_id` (uuid, FK → profiles.id) | Who invited this user. Forms the tree. |
-| `profiles` | `verification_completed` (bool) | True once user finishes the verification questionnaire. |
+| `profiles` | `verification_completed` (bool) | True once user finishes verification questionnaire. |
 | `profiles` | `role` ('subscriber' / 'member' / 'affiliate' / 'admin') | Becomes `member` after verification. |
 | `invitation_codes` | `code`, `user_id`, `usage_count` | Per-affiliate invite code + usage counter. |
 | `submissions` | `status` ('pending' / 'approved' / 'rejected') | Proof-of-travel submissions. |
 | `referral_tree` (VIEW) | recursive CTE joining `profiles` on `inviter_id` | Flattens the tree into Level 1 + Level 2 rows for a given affiliate. |
 
 ### Key files
+
 - UI: [components/invite-friends/referrals.tsx](components/invite-friends/referrals.tsx)
 - Data hook: [hooks/useReferrals.ts](hooks/useReferrals.ts)
 - Schema + view: [supabase/migrations/20260417151509_remote_schema.sql:656-687](supabase/migrations/20260417151509_remote_schema.sql#L656-L687)
 - Usage-count trigger: [supabase/migrations/20260417151509_remote_schema.sql:270-282](supabase/migrations/20260417151509_remote_schema.sql#L270-L282)
 
 ### What's NOT implemented yet
+
 - No qualification gating — every `inviter_id` link currently shows up in the tree regardless of whether the invitee is real/active.
-- No credits table, no credit awards.
+- No star wallet, no star awards.
 - The "green dot" in the UI has no state — it's always solid green.
 
 ---
 
-## New rules (to implement)
+## Qualification rules (to implement)
 
-### 1. Referral qualification states
-A referral row in the tree has one of three visible states, driven by the invitee's own profile + submission history:
+### 1. Referral states
+
+A referral row in the tree has one of three visible states, driven by the invitee's profile + submission history:
 
 | State | Trigger condition | Dot appearance | Name shown |
 |---|---|---|---|
-| **Registered only** | Invitee signed up, no verification yet | Empty/outline dot (gray border, hollow) | Hidden or placeholder (e.g. "Pending member") |
+| **Registered only** | Invitee signed up, no verification yet | Empty / outline dot (gray border, hollow) | Hidden or placeholder ("Pending member") |
 | **Verified member** | `profiles.verification_completed = true` | Gray solid dot | Name visible |
-| **Active (qualified)** | Verified **AND** has at least one `submissions.status = 'approved'` | Full green dot (current color `#206E56`) | Name visible |
+| **Active (qualified)** | Verified **AND** has at least one `submissions.status = 'approved'` | Full green dot (`#206E56`) | Name visible |
 
-**Reasoning:** we do not want to display or reward ghost/spam accounts. A referral only "counts" once the invitee has proven real engagement by getting one submission approved.
+Reasoning: don't display or reward ghost / spam accounts. A referral only "counts" once the invitee has proven real engagement.
 
-### 2. Credit reward — the "1+1" rule
+### 2. Star awards — the 1+1 rule (in stars)
+
 When an invitee transitions to the **Active (qualified)** state for the first time:
 
-- **+1 credit** to the invitee (applied to their own nearest-complete R/C/B task, per [`credits-overview.md`](credits-overview.md) auto-placement rules).
-- **+1 credit** to their direct inviter (Level 1 relationship, same auto-placement rules).
+- **+100 stars** to the invitee (auto-converts to +1 Visit 10 progress when the wallet hits 100).
+- **+100 stars** to the direct inviter (Level 1 relationship).
+- If the inviter's own inviter (Level 2 → top-level affiliate) exists: **+50 stars** to that user.
 
-**Level 2 is no longer display-only** (updated 2026-04-22). When a Level 2 invitee qualifies, the top-level affiliate accumulates +0.5 credit; every pair of Level 2 qualifications settles as +1 auto-placed credit. Full mechanic in [`credits-overview.md`](credits-overview.md).
+> Star values locked 2026-05-03 alongside the credits → stars rebrand. Two qualified Level 2 invitees = 100 stars = +1 Visit 10 progress (same as one Level 1).
 
-Award fires **once per invitee**, on the first approved submission after verification. Subsequent approvals do not grant additional referral credits.
+### 3. Per-invitee one-shot
 
-Visual manifestation: a referral credit is never shown as "balance +1." It appears on the recipient's My Tasks tracker as a **gold tick** on the progress bar of the auto-placed category, with `(+N)` beside the approved count. See [`credits-overview.md`](credits-overview.md) "Referral auto-placement rules."
+Award fires **once per invitee**, on the first approved submission after verification. Subsequent approvals do not grant additional referral stars.
 
-### 3. The "within 1 hour" reward note
-Product copy referenced a "reward credit of visit within 1 hour" tied to the invitee's first submission. Treat this as a UX timing hint for the invitee's own experience (show the credit landing quickly after approval), **not** as a hard expiry window on the referral reward itself. Clarify with product before enforcing a 1-hour cutoff in the database logic.
+> *"This is for 1st time only ya. Means every submission of new user on new successfully approval"* — Kasey
 
-### 4. Anti-abuse
-- Credits only issue when the submission reaches `approved` — AI review + human review gate this.
+### 4. The "within 1 hour" reward note
+
+Product copy referenced a "reward credit of visit within 1 hour" tied to the invitee's first submission. Treat this as a UX timing hint — show the star landing quickly after approval — **not** as a hard expiry window. Confirm with product before enforcing a 1-hour cutoff in the database.
+
+### 5. Anti-abuse
+
+- Stars only issue when the submission reaches `approved` — AI review + human review gate this.
 - A rejected first submission does **not** award; the invitee stays in "Verified member" state and can try again with another submission.
-- If an approved submission is later reverted to rejected (admin override), decide whether to claw back the credit. **Open question — confirm with product.**
+- **Approvals are final** ([`credits-overview.md`](credits-overview.md) §"Approvals are final"). Admin cannot reverse `approved` → `rejected`, so referral stars cannot be clawed back. Once awarded, locked.
 
 ---
 
-## Credits (full spec now in [`credits-overview.md`](credits-overview.md))
-Credits are the app's single progress unit (replacing the earlier "points" concept). The full economy — earning rules, auto-placement algorithm, per-category caps, badge tiers, voucher rewards — is locked in [`credits-overview.md`](credits-overview.md) as of 2026-04-23.
+## How referral stars feed the cycle
 
-What this doc contributes to the credit system:
-- The qualification gate (Verified + first approved submission) that triggers a credit event.
-- The 1+1 split at Level 1 (invitee + inviter).
-- The 0.5 + 0.5 = 1 split at Level 2 (top-level affiliate accumulator).
+Per [`credits-overview.md`](credits-overview.md), all extra-task stars enter a single per-user wallet. Once the wallet hits 100, +1 Visit 10 progress is auto-applied (max +4 per cycle, leftover queued).
 
-Everything after the credit event — auto-placement, ledger shape, cycle mechanics, voucher minting — lives in [`credits-overview.md`](credits-overview.md).
+Referral does **not** auto-place onto a specific category — there are no category-specific cycles anymore. The Visit 10 cycle is a single cumulative counter across R/C/B.
+
+Visual manifestation: a referral star award shows on the recipient's Visit 10 card as `(+N)` extras applied to the cycle, plus a History entry like `{date} • {invitee_name} qualified (L1) • +100 ★`. See [`history-feed.md`](history-feed.md) for the full event vocabulary.
 
 ---
 
-## Implementation checklist (when the user is ready to build)
-1. Add `credits_ledger` table + RLS so users can only read their own rows. Schema per [`credits-overview.md`](credits-overview.md) "Implementation notes" — `(user_id, category, delta_numerator, reason, source_submission_id, source_referral_id, cycle_id, created_at)`.
-2. Add `referral_half_credit_accumulator(user_id, count)` for Level 2 pairing.
-3. Add a `first_approved_submission_at` column on `profiles` (nullable timestamp) — set once via trigger when a user's first submission reaches `approved`.
-4. Trigger/edge function on that transition:
-   - Run the auto-placement algorithm (nearest-complete R/C/B category, tie-break Restaurant → Cafe → Bar, skip if that category has already hit 4 gold ticks this cycle).
-   - Insert `+1` ledger row for the invitee with `reason = 'approved_submission'` *plus* their own referral credit on the chosen category.
-   - If `profiles.inviter_id` is not null (Level 1), insert `+1` ledger row for the inviter with `reason = 'level1_referral'`, `source_referral_id = <invitee_id>`.
-   - If the inviter's own inviter (Level 2 → top-level affiliate) exists, increment that user's half-credit accumulator by 1. If the accumulator is now even, insert `+1` ledger row with `reason = 'level2_pair'` and decrement the accumulator by 2.
-5. Extend the `referral_tree` view (or the `useReferrals` hook query) to join `verification_completed` and `first_approved_submission_at` so the UI can render the three dot states.
+## Implementation checklist (when ready to build)
+
+1. Add `star_wallet` table (per [`credits-overview.md`](credits-overview.md) "Storage model") + RLS so users can only read their own row.
+2. Add `star_ledger` table for the audit trail of every star award + every conversion-to-progress event.
+3. Add `first_approved_submission_at` column on `profiles` (nullable timestamp) — set once via trigger when a user's first submission reaches `approved`.
+4. Trigger on that transition:
+   - Insert `+100` ledger row for the invitee with `reason = 'l1_referral_self_bonus'` (the invitee's own first-approval bonus).
+   - If `profiles.inviter_id` is not null (Level 1), insert `+100` ledger row for the inviter with `reason = 'l1_referral'`, `source_id = <invitee_id>`.
+   - If the inviter's own inviter (Level 2 → top-level affiliate) exists, insert `+50` ledger row for that user with `reason = 'l2_referral'`.
+   - For each ledger insert, run the wallet-update routine (which may trigger a conversion-to-progress event if the wallet hits 100, capped at +4/cycle).
+5. Extend the `referral_tree` view (or `useReferrals` hook query) to join `verification_completed` and `first_approved_submission_at` so the UI can render the three dot states.
 6. Update [components/invite-friends/referrals.tsx:231-237](components/invite-friends/referrals.tsx#L231-L237) so `greenCircle` style becomes conditional: hollow / gray / green.
-7. Hide names (or show a "Pending" placeholder) for invitees still in the "Registered only" state.
-8. Surface a "Bonus 1 Credit for {category}" toast/banner on the Referrals page when a qualifying event awards the user a credit.
+7. Hide names (or show "Pending") for invitees in "Registered only" state.
+8. Surface a toast / banner on the Referrals page when a qualifying event awards stars: *"+100 stars from {invitee_name}"*.
 
 ---
 
-## Open questions to resolve with product
-- ~~Do Level 2 qualified referrals award anything to the top-level affiliate?~~ **Resolved 2026-04-22:** yes, +0.5 per qualified Level 2 invitee, settled as +1 credit per pair. Full mechanic in [`credits-overview.md`](credits-overview.md).
-- ~~Is there a cap on the number of referrals per affiliate?~~ **Resolved 2026-04-23: no.** Referrals are unlimited (see "Referral count is unlimited" above). Earlier 7-cap-with-delete-slot proposal was rejected.
-- Claw-back policy if an approved submission is later rejected.
-- Does the "within 1 hour" copy reflect a real business rule, or is it just UX framing?
-- Is there a cap on referral *credits* per affiliate per day / month? (Per-category per-cycle cap is 4 gold ticks — see [`credits-overview.md`](credits-overview.md) — but that's a per-cycle mechanic, not a per-affiliate rate limit. The unlimited-referrals decision strongly suggests no rate limit either, but confirm explicitly.)
+## Open questions
+
+- ~~Do Level 2 qualified referrals award anything?~~ **Resolved 2026-04-22 / re-locked 2026-05-03:** yes, +50 stars per qualified Level 2 invitee.
+- ~~Is there a cap on the number of referrals per affiliate?~~ **Resolved 2026-04-23: no.** Unlimited.
+- ~~Claw-back policy if an approved submission is later rejected.~~ **Resolved 2026-05-04: N/A.** Admin cannot reverse approvals — once approved, locked.
+- Does the "within 1 hour" copy reflect a real business rule or just UX framing?
+- Is there a per-affiliate rate limit on referral stars per day / month? (Per-cycle +4 trade cap exists in [`credits-overview.md`](credits-overview.md) but that's a conversion cap, not a referral-rate cap. Unlimited-referrals decision strongly suggests no rate limit, but confirm.)
