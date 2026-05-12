@@ -9,9 +9,13 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { UserPlus, ChevronDown, ChevronUp, Gift } from 'lucide-react-native';
+import { UserPlus, ChevronDown, ChevronUp, Star } from 'lucide-react-native';
 import { useUser } from '@/context/UserContext';
-import { useReferrals, type ReferralState } from '@/hooks/useReferrals';
+import {
+  useReferrals,
+  type Level1Referral,
+  type ReferralState,
+} from '@/hooks/useReferrals';
 import { supabase } from '@/lib/supabase';
 
 const truncateName = (name: string | null | undefined, maxLength: number = 30): string => {
@@ -21,12 +25,15 @@ const truncateName = (name: string | null | undefined, maxLength: number = 30): 
 };
 
 const BAR_GREEN = '#206E56';
-const BAR_GOLD = '#D4A017';
+const STAR_GOLD = '#E5A93D';
 const BANNER_DURATION_MS = 4000;
 
-interface CreditBanner {
-  category: string;
-  reason: 'level1_referral' | 'level2_pair';
+type StarBannerKind = 'self_bonus' | 'l1' | 'l2';
+
+interface StarBanner {
+  kind: StarBannerKind;
+  stars: number;
+  inviteeName: string | null;
 }
 
 function StateDot({ state, size = 40 }: { state: ReferralState; size?: number }) {
@@ -71,11 +78,19 @@ export default function Referrals() {
   const { userData } = useUser();
   const { level1Referrals, isLoading, error, refetch } = useReferrals(userData?.id);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
-  const [banner, setBanner] = useState<CreditBanner | null>(null);
+  const [banner, setBanner] = useState<StarBanner | null>(null);
   const bannerOpacity = useRef(new Animated.Value(0)).current;
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showBanner = (b: CreditBanner) => {
+  // Snapshot the latest referrals list in a ref so the realtime callback can
+  // resolve invitee names without forcing the subscription to be torn down on
+  // every refetch.
+  const referralsRef = useRef<Level1Referral[]>([]);
+  useEffect(() => {
+    referralsRef.current = level1Referrals;
+  }, [level1Referrals]);
+
+  const showBanner = (b: StarBanner) => {
     setBanner(b);
     Animated.timing(bannerOpacity, {
       toValue: 1,
@@ -94,11 +109,30 @@ export default function Referrals() {
     }, BANNER_DURATION_MS);
   };
 
-  // Realtime subscription to credit grants triggered by referral qualifications.
-  // Only level1_referral / level2_pair are surfaced — approved_submission rows
-  // are the user's own submissions and don't deserve a referral banner.
+  // Realtime subscription to star awards triggered by referral qualifications.
+  // The on_submission_approved trigger writes three reasons we care about:
+  //   l1_referral_self_bonus  → +100 to the invitee themselves (1st approval)
+  //   l1_referral             → +100 to their direct inviter
+  //   l2_referral             → +50  to the inviter's inviter (grandparent)
+  // For l1/l2_referral rows targeting *us*, source_referral_user_id is the
+  // invitee whose first approval triggered the chain.
   useEffect(() => {
     if (!userData?.id) return;
+
+    const lookupInviteeName = (inviteeId: string | null | undefined): string | null => {
+      if (!inviteeId) return null;
+      for (const l1 of referralsRef.current) {
+        if (l1.referral.user_id === inviteeId) {
+          return l1.referral.full_name || l1.referral.username || null;
+        }
+        for (const l2 of l1.level2Referrals) {
+          if (l2.user_id === inviteeId) {
+            return l2.full_name || l2.username || null;
+          }
+        }
+      }
+      return null;
+    };
 
     const channel = supabase
       .channel(`referral_banner:${userData.id}`)
@@ -107,18 +141,29 @@ export default function Referrals() {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'credits_ledger',
+          table: 'star_ledger',
           filter: `user_id=eq.${userData.id}`,
         },
         (payload) => {
           const row = payload.new as {
             reason?: string;
-            category?: string;
+            delta_stars?: number;
+            source_referral_user_id?: string | null;
           };
-          if (row.reason === 'level1_referral' || row.reason === 'level2_pair') {
+          const stars = row.delta_stars ?? 0;
+          if (row.reason === 'l1_referral_self_bonus') {
+            showBanner({ kind: 'self_bonus', stars, inviteeName: null });
+          } else if (row.reason === 'l1_referral') {
             showBanner({
-              reason: row.reason,
-              category: row.category ?? 'Restaurant',
+              kind: 'l1',
+              stars,
+              inviteeName: lookupInviteeName(row.source_referral_user_id),
+            });
+          } else if (row.reason === 'l2_referral') {
+            showBanner({
+              kind: 'l2',
+              stars,
+              inviteeName: lookupInviteeName(row.source_referral_user_id),
             });
           }
         }
@@ -275,14 +320,20 @@ export default function Referrals() {
   );
 }
 
-function renderBanner(banner: CreditBanner | null, opacity: Animated.Value) {
+function renderBanner(banner: StarBanner | null, opacity: Animated.Value) {
   if (!banner) return null;
-  const labelCat =
-    banner.category[0].toUpperCase() + banner.category.slice(1).toLowerCase();
+  let label: string;
+  if (banner.kind === 'self_bonus') {
+    label = `+${banner.stars} ★ for your first approval!`;
+  } else if (banner.inviteeName) {
+    label = `+${banner.stars} ★ from ${truncateName(banner.inviteeName, 24)}`;
+  } else {
+    label = `+${banner.stars} ★ from a referral`;
+  }
   return (
     <Animated.View pointerEvents="none" style={[styles.banner, { opacity }]}>
-      <Gift size={18} color="#FFFFFF" />
-      <Text style={styles.bannerText}>Bonus 1 Credit for {labelCat}</Text>
+      <Star size={18} color="#FFFFFF" fill="#FFFFFF" />
+      <Text style={styles.bannerText}>{label}</Text>
     </Animated.View>
   );
 }
@@ -441,7 +492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderRadius: 12,
-    backgroundColor: BAR_GOLD,
+    backgroundColor: STAR_GOLD,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.18,
