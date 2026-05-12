@@ -89,9 +89,36 @@ When a user submits proof in [components/verified-member/submission/index.tsx](c
    - everything else → `others`
 4. The mapped category is saved as `submissions.partner_store_category` at [submission/index.tsx:218](components/verified-member/submission/index.tsx#L218).
 5. Receipt + selfie are uploaded to Supabase Storage buckets (`submitted-receipt`, `submitted-selfie`).
-6. The 20/day RLS limit is enforced at insert time.
+6. The 20/day RLS limit is enforced at insert time. **Re-confirmed 2026-05-10** — Kasey: *"i think 20 per day is ok"*. Cap stays. Submissions land via Tasks → Submit subtab regardless of how the user discovered the store (catalog, map, favorites list).
 
 **Important:** The submission category enum is `cafe | restaurant | others` — there is **no `bar` or `hotel`** value. A submission against a bar partner store ends up in `others`. This has knock-on effects for badges (see [`badges.md`](badges.md)).
+
+---
+
+## Favorites (heart icon — pending wiring)
+
+> *"ok, we make it favourite."* — Kasey, 2026-05-10
+> *"saved for visit maybe we make it under task? so they can choose which one to visit next time. we make it favourite 1st."* — Kasey, 2026-05-10
+
+The heart icon at [components/partner-store/PartnerStoreDetailContent.tsx:99-106](components/partner-store/PartnerStoreDetailContent.tsx#L99-L106) is currently rendered with no `onPress` handler — a dead button. It's planned to drive a **per-user favorites system** for partner stores.
+
+### v1 scope (favorites)
+
+- **Toggle** — heart icon on partner store detail page becomes interactive: tap to favorite / unfavorite.
+- **Storage** — new `user_favorite_stores` table: `(user_id, partner_store_id, created_at)`, primary key on the pair, RLS scoped to owner.
+- **Listing surface** — **both** (locked 2026-05-10):
+  1. New "Favorites" subtab on the Profile tab — primary, full list
+  2. "Favorites" filter chip on the Map / Home stores list — quick scoping
+- **Profile stat slot** — the existing third stat slot (currently labeled **"Collection"** in [app/(tabs)/profile.tsx](app/(tabs)/profile.tsx)) becomes **"Favorites"** count (locked 2026-05-10). Sourced from `useFavoriteStores` row count.
+- **Submission flow stays unchanged** — adding to favorites does NOT bypass the Tasks → Submit subtab path. Users still go through Submit Proof to log a visit. Favorites is purely a "remember this place" affordance.
+
+### v2 scope (deferred — "save for visit" / wishlist)
+
+A separate "saved for next visit" / wishlist concept under the Tasks tab, distinct from favorites:
+- Favorites = "I love this place, may visit repeatedly"
+- Saved for visit = "I plan to visit this once"
+
+Kasey deferred this with *"we make it favourite 1st."* Not in current scope.
 
 ---
 

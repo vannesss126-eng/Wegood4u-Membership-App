@@ -2,7 +2,7 @@
 
 > Source of truth for the three engagement loops that earn **stars**: Social Media Share, Daily Log-In Streak, and Referral.
 > Locks: 2026-05-03 (initial), 2026-05-04 (daily streak revised to 50 stars / 14 days, manual trade flow, day-1 access for verified members).
-> Pair with [`credits-overview.md`](credits-overview.md) (Visit 10 cycle + stars-to-progress trade), [`referral-system.md`](referral-system.md) (referral tree + qualification gate), and [`badges.md`](badges.md) (rank progression).
+> Pair with [`credits-overview.md`](credits-overview.md) (Visit 10 cycle + stars-to-progress trade), [`referral-system.md`](referral-system.md) (referral tree + qualification gate), and [`badges.md`](badges.md) (badge progression).
 
 ---
 

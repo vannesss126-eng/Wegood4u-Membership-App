@@ -97,7 +97,12 @@ A qualified referral does not create a notification today. Under the locked star
 Share verification, daily streak milestones, and stars-to-progress conversions all need notification wiring. Sources are `submission_shares`, `daily_checkins`, and `star_ledger` respectively. See [`extra-tasks.md`](extra-tasks.md).
 
 ### Cycle-close events — NOT wired
-A cycle reaching 10/10 (claim-eligible) and the user tapping Complete Tasks (voucher minted) are both notification-worthy moments. Sources are `visit_progress.closed_at` and `vouchers` insert.
+A cycle reaching 10/10 (claim-eligible) and the user tapping Complete Tasks (cycle closes; may mint a voucher if a Visit Badge level is crossed) are both notification-worthy moments. Sources are `visit_progress.closed_at` and `vouchers` insert.
+
+### Voucher redemption — wired (Phase 7)
+`notify_on_voucher_redemption_request` fires on `vouchers.redeemed_at` flip and writes an admin-targeted notification with action `voucher_redemption_requested`. Admins see the queue in the **Tasks → Redeem Req tab** (sibling to Submission). Source is the `redeemed_at` transition.
+
+For v1, admin notification is the primary trigger — it's how the team knows to follow up with the user via WhatsApp. Once contacted, the admin taps "Mark fulfilled" which sets `vouchers.fulfilled_at` and removes the row from the queue.
 
 ---
 
@@ -156,9 +161,10 @@ Only three actions exist (`submission_created`, `submission_approved`, `submissi
 - **Daily streak milestone** — 14-day streak completed; e.g. *"+100 stars — your streak hit 14 days!"*
 - **Referral qualified** — L1 = +100 stars, L2 = +50 stars; e.g. *"{name} qualified — +100 stars."*
 - **Stars converted to progress** — wallet hit 100, +1 progress applied; e.g. *"+1 progress applied to your Visit 10 Task."* (Optional — may be too noisy.)
-- **Cycle complete (claimable)** — Visit 10 reached 10/10; user must tap Complete Tasks to mint the voucher; e.g. *"Your Visit 10 Task is ready to claim."*
-- **Badge earned** — tier crossing on cycle close; e.g. *"You reached Silver Level 1."* — currently silent (see "Badges are silent" above).
-- **Voucher claimable / redeemed** — pairs with the Rewards subtab.
+- **Cycle complete (claimable)** — Visit 10 reached 10/10; user must tap Complete Tasks to close the cycle; e.g. *"Your Visit 10 Task is ready to claim."*
+- **Badge earned** — Visit Badge or Category Badge level reached; e.g. *"You reached Silver Level 1."* — wired via `notify_on_badge_earned` (Phase 1).
+- **Voucher minted** — fires on Visit Badge level-up trigger (e.g. *"You earned a Silver voucher"*).
+- **Voucher redemption requested** — admin-targeted; feeds the **Redeem Req** tab in admin Tasks. User-side toast on tap is sufficient; no separate "request received" notification fires for the user.
 - **Account-level events** — password change confirmation, deletion grace period if added, etc.
 
 The History page on the Tasks tab ([`history-feed.md`](history-feed.md)) renders the same event vocabulary from a separate feed query; the notifications system should share the event taxonomy so both surfaces stay in sync.

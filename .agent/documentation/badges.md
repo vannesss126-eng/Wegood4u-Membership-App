@@ -1,39 +1,41 @@
-# Badges & Ranks — Six-Rank Progression System
+# Badges — Five-Badge Progression System
 
-> Source of truth for the rank + badge progression model. Locked **2026-05-04** — replaces the earlier single-global-tier design with six separate ranks.
-> Pair with [`credits-overview.md`](credits-overview.md) (the Visit 10 cycle that drives Visit Rank), [`extra-tasks.md`](extra-tasks.md) (star-earning loops), and [`badge-rewards.md`](badge-rewards.md) (Visit Rank → voucher mapping).
+> Source of truth for the badge progression model. Locked **2026-05-06**.
+> Pair with [`credits-overview.md`](credits-overview.md) (the Visit 10 cycle that drives the Visit Badge), [`extra-tasks.md`](extra-tasks.md) (star-earning loops), and [`badge-rewards.md`](badge-rewards.md) (Visit Badge → voucher mapping).
 
 ---
 
-## What ranks represent
+## What badges represent
 
-Wegood4u tracks **six independent ranks**, each with its own Bronze / Silver / Gold / Platinum progression and L1/L2/L3 sub-levels:
+Wegood4u tracks **five badges** in v1, each with its own Bronze / Silver / Gold / Platinum tier progression and L1 / L2 / L3 sub-levels. More badges may be added later.
 
-| Rank | Driven by | Drives a reward? |
+| Badge | Driven by | Drives a reward? |
 |---|---|---|
-| **Visit Rank** | Cumulative completed Visit 10 cycles | **Yes** — voucher tier on cycle claim ([`badge-rewards.md`](badge-rewards.md)) |
-| Cafe Rank | Real approved Cafe submissions | Future ("coming soon" — vendor sponsorship pending) |
-| Bar Rank | Real approved Bar submissions | Future |
-| Restaurant Rank | Real approved Restaurant submissions | Future |
-| Hotel Rank | Real approved Hotel submissions | Future |
-| Experience Rank | Real approved Experience submissions | Future |
+| **Visit Badge** (user rank) | Completed Visit 10 tasks (cumulative) | **Yes** — 1 voucher minted on every Visit Badge level-up (12 lifetime per user, see [`badge-rewards.md`](badge-rewards.md)) **+** profile picture frame |
+| **Restaurant Badge** | Real approved Restaurant visits | Not in v1 — added when vendor sponsorships are signed |
+| **Cafe Badge** | Real approved Cafe visits | Not in v1 — added when vendor sponsorships are signed |
+| **Bar Badge** | Real approved Bar visits | Not in v1 — added when vendor sponsorships are signed |
+| **Hotel Badge** | Real approved Hotel visits | Not in v1 — Hotel partner stores deferred until partnership signed |
 
 > *"this rank is for 10 visit rank. and cafe have its own rank"* — Kasey, 2026-05-04
 > *"this will be rewards later, once i got sponsorship from vendors"* — Kasey, 2026-05-04
+> Terminology locked 2026-05-06: these are **badges**, not ranks. "Tier" and "Level" are sub-attributes within each badge.
 
-Per-category ranks are **never affected by extras** (referral / share / streak). Only real approved submissions move them.
+Category badges are **never affected by extras** (referral / share / streak). Only real approved submissions move them.
+
+**Experience** is not in v1. The `store_category` enum will eventually grow to include it but no Experience badge ships in v1.
 
 ---
 
-## Visit Rank — drives vouchers
+## Visit Badge — drives vouchers + profile picture frame
 
-Visit Rank is derived from cumulative **completed Visit 10 cycles** (where a cycle = 10 progress units, ≥6 from real visits + ≤4 from star trades).
+The Visit Badge is the user's overall rank. Driven by **completed Visit 10 tasks** (where each task = 10 progress units: ≥6 from real R/C/B visits + ≤4 from star-traded extras — see [`credits-overview.md`](credits-overview.md)).
 
 ### Tier + level table
 
-| Cycles completed | Tier | Level |
+| Completed Visit 10 tasks | Tier | Level |
 |---|---|---|
-| 0 | — (no rank) | — |
+| 0 | — (no badge) | — |
 | 1 | Bronze | 1 |
 | 2 | Bronze | 2 |
 | 3–4 | Bronze | 3 |
@@ -50,40 +52,55 @@ Visit Rank is derived from cumulative **completed Visit 10 cycles** (where a cyc
 ### Reference TypeScript
 
 ```ts
-function visitRankFor(cycles: number): { tier: RankTier; level: 1 | 2 | 3 } | null {
-  if (cycles <= 0)   return null;
-  if (cycles === 1)  return { tier: 'bronze',   level: 1 };
-  if (cycles === 2)  return { tier: 'bronze',   level: 2 };
-  if (cycles <= 4)   return { tier: 'bronze',   level: 3 };
-  if (cycles <= 6)   return { tier: 'silver',   level: 1 };
-  if (cycles <= 9)   return { tier: 'silver',   level: 2 };
-  if (cycles <= 14)  return { tier: 'silver',   level: 3 };
-  if (cycles <= 19)  return { tier: 'gold',     level: 1 };
-  if (cycles <= 26)  return { tier: 'gold',     level: 2 };
-  if (cycles <= 34)  return { tier: 'gold',     level: 3 };
-  if (cycles <= 39)  return { tier: 'platinum', level: 1 };
-  if (cycles <= 44)  return { tier: 'platinum', level: 2 };
-  return              { tier: 'platinum', level: 3 };
+function visitBadgeFor(tasksCompleted: number): { tier: BadgeTier; level: 1 | 2 | 3 } | null {
+  if (tasksCompleted <= 0)   return null;
+  if (tasksCompleted === 1)  return { tier: 'bronze',   level: 1 };
+  if (tasksCompleted === 2)  return { tier: 'bronze',   level: 2 };
+  if (tasksCompleted <= 4)   return { tier: 'bronze',   level: 3 };
+  if (tasksCompleted <= 6)   return { tier: 'silver',   level: 1 };
+  if (tasksCompleted <= 9)   return { tier: 'silver',   level: 2 };
+  if (tasksCompleted <= 14)  return { tier: 'silver',   level: 3 };
+  if (tasksCompleted <= 19)  return { tier: 'gold',     level: 1 };
+  if (tasksCompleted <= 26)  return { tier: 'gold',     level: 2 };
+  if (tasksCompleted <= 34)  return { tier: 'gold',     level: 3 };
+  if (tasksCompleted <= 39)  return { tier: 'platinum', level: 1 };
+  if (tasksCompleted <= 44)  return { tier: 'platinum', level: 2 };
+  return                      { tier: 'platinum', level: 3 };
 }
 ```
 
 ### Voucher mapping
 
-Tier (not level) determines voucher kind on claim. Full table in [`badge-rewards.md`](badge-rewards.md).
+Tier (not level) determines voucher kind. Each level-up mints a voucher of that level's tier — Silver L1, Silver L2, and Silver L3 each mint identical Silver vouchers. Full table in [`badge-rewards.md`](badge-rewards.md).
+
+### Profile picture frame
+
+When the user's Visit Badge tier changes, their profile picture displays a tier-specific frame. Frame assets live at [`assets/images/tier_frame/`](../../assets/images/tier_frame/):
+
+| Tier | Frame asset |
+|---|---|
+| Bronze | `Bronze.webp` |
+| Silver | `Silver.webp` |
+| Gold | `Goldd.webp` ⚠️ (current filename has typo — rename to `Gold.webp` recommended) |
+| Platinum | `Diamond.webp` ⚠️ (current filename mismatches spec — rename to `Platinum.webp` recommended) |
+
+Frame is **per-tier only**, not per-level — Silver L1 and Silver L3 share the same frame. Frame swaps automatically when the user crosses a tier boundary on cycle claim.
+
+Render: composited around the user's profile picture wherever it appears (header, profile screen, comment threads, referral list rows). The frame includes a tier ribbon at the bottom, so the picture itself shows inside the glowing ring.
 
 ---
 
-## Per-category Ranks — Cafe / Bar / Restaurant / Hotel / Experience
+## Category Badges — Restaurant / Cafe / Bar / Hotel
 
-Each category has the same Bronze / Silver / Gold / Platinum structure with L1 / L2 / L3 sub-levels, but the thresholds are based on **real approved submissions in that category**.
+Each of the four category badges has the same Bronze / Silver / Gold / Platinum tier structure with L1 / L2 / L3 sub-levels, with thresholds based on **real approved submissions in that category**.
 
-### Per-category threshold table
+### Threshold table
 
-> Locked Kasey 2026-05-04. Same thresholds applied to all five per-category ranks.
+> Locked Kasey 2026-05-04. Same thresholds applied to all four category badges.
 
 | Visits | Tier | Level |
 |---|---|---|
-| 0–4 | — (no rank) | — |
+| 0–4 | — (no badge) | — |
 | 5–9 | Bronze | 1 |
 | 10–19 | Bronze | 2 |
 | 20–29 | Bronze | 3 |
@@ -100,7 +117,7 @@ Each category has the same Bronze / Silver / Gold / Platinum structure with L1 /
 ### Reference TypeScript
 
 ```ts
-function categoryRankFor(visits: number): { tier: RankTier; level: 1 | 2 | 3 } | null {
+function categoryBadgeFor(visits: number): { tier: BadgeTier; level: 1 | 2 | 3 } | null {
   if (visits < 5)    return null;
   if (visits < 10)   return { tier: 'bronze',   level: 1 };
   if (visits < 20)   return { tier: 'bronze',   level: 2 };
@@ -117,52 +134,72 @@ function categoryRankFor(visits: number): { tier: RankTier; level: 1 | 2 | 3 } |
 }
 ```
 
-### Per-category rank rewards
+### Category Badge rewards
 
-Currently **none** wired up. UI labels them "Coming soon" with a teaser hint about future rewards. Reward triggers will be defined once vendor sponsorships are signed (Kasey 2026-05-04).
+Currently **none** wired up. Category Badge tiles in v1 show progression (current tier+level + threshold to next) but no reward callout. Reward triggers will be defined once vendor sponsorships are signed. **No "Coming soon" wording in the UI** per Kasey 2026-05-07.
 
 ---
 
 ## Day-one launch behavior
 
-> Per [`credits-overview.md`](credits-overview.md) §"Day-one launch — no backfill":
+> Locked Kasey 2026-05-06: **No backfill anywhere.**
 
-- **Visit Rank starts at 0 cycles** for everyone (no backfill from existing approvals).
-- **Per-category ranks DO count existing approved submissions.** A user with 6 prior cafe approvals starts with Cafe Rank at Bronze L1 (5+) and progressing toward Bronze L2 (10).
+When a new user completes the verification form, they start at:
 
-Distinction matters: Visit 10 is a *cycle* (resets at 10), so backfilling would be unfair to slow players. Per-category ranks are *cumulative all-time*, so existing data slots in cleanly.
+- Visit Badge: **0 tasks completed** (no badge yet)
+- Restaurant Badge: **0 visits** (no badge yet)
+- Cafe Badge: **0 visits** (no badge yet)
+- Bar Badge: **0 visits** (no badge yet)
+- Hotel Badge: **0 visits** (no badge yet)
+
+Existing approved submissions from before launch day **do not** count toward any badge — every user starts fresh from verification onward. This applies uniformly to every badge.
+
+> *"After they submit their verification form. They would likely start with 0 of course, visit rank 0, all category badges 0."* — Kasey, 2026-05-06
 
 ---
 
 ## Categories table
 
-| Category | Earns Visit 10 progress? | Has its own per-category rank? |
+| Category | Earns Visit 10 progress? | Has its own category badge? |
 |---|---|---|
 | Restaurant | Yes | Yes |
 | Cafe | Yes | Yes |
 | Bar | Yes | Yes |
 | Hotel | No (separate "bigger claims" track, TBD) | Yes |
-| Experience | No | Yes |
+| ~~Experience~~ | ~~No~~ | **Not in v1** — deferred |
 
 ---
 
 ## Badge art assets
 
-Badges are per-rank, per-tier, per-level art pieces. With 6 ranks × 4 tiers × 3 levels = 72 unique pieces if we go full.
+Each badge needs tier × level art (4 tiers × 3 levels = 12 unique pieces per badge) **plus** the profile picture frame for Visit Badge.
 
 ### Asset strategies (one to choose with the team)
 
 | Strategy | Asset count | Notes |
 |---|---|---|
-| **A. Full set** | 72 unique | Most polish, biggest art cost |
-| **B. Tier-only** | 6 ranks × 4 tiers = 24 | Levels still tracked + shown as text. Art is per-tier only. |
-| **C. Composite** *(Kasey-suggested)* | 5 category logos + 12 tier-level overlays + 12 Visit Rank pieces = 29 | Runtime composite of category logo + tier-level overlay. Lowest art cost. |
+| **A. Full set** | 5 badges × 12 = 60 unique | Most polish, biggest art cost |
+| **B. Tier-only** | 5 badges × 4 tiers = 20 | Levels still tracked + shown as text. Art is per-tier only. |
+| **C. Composite** *(recommended)* | 4 category logos + 12 tier-level overlays + 12 Visit Badge pieces = 28 | Runtime composite of category logo + tier-level overlay |
 
-**Recommend Strategy C** for v1. The materials list to Kasey's team should request:
+**Recommend Strategy C** for v1. Materials breakdown:
 
-1. **12 Visit Rank badges** (full custom art) — `visit_{tier}_{level}.webp` at 360×360 px
-2. **5 category logos** — `category_{cafe|bar|restaurant|hotel|experience}.webp` at 360×360 px (existing brand logos likely reusable)
+1. **12 Visit Badge art pieces** (full custom art) — `visit_{tier}_{level}.webp` at 360×360 px
+2. **4 category logos** — `category_{cafe|bar|restaurant|hotel}.webp` at 360×360 px (existing brand logos likely reusable)
 3. **12 tier-level overlays** (transparent PNG/WebP) — `tier_overlay_{tier}_{level}.webp` at 360×360 px
+
+### Profile picture frame assets (received 2026-05-06)
+
+Located at [`assets/images/tier_frame/`](../../assets/images/tier_frame/):
+
+| Tier | File | Size | Notes |
+|---|---|---|---|
+| Bronze | `Bronze.webp` | 27 KB | OK |
+| Silver | `Silver.webp` | 25 KB | OK |
+| Gold | `Goldd.webp` | 27 KB | ⚠️ filename typo — should be `Gold.webp` |
+| Platinum | `Diamond.webp` | 25 KB | ⚠️ filename mismatch — should be `Platinum.webp` to match spec |
+
+Action: ask the team to rename, or rename ourselves on import. Filenames are external-facing only inside Supabase Storage path — no spec-level concern.
 
 ### Asset URL pattern
 
@@ -170,13 +207,14 @@ Badges are per-rank, per-tier, per-level art pieces. With 6 ranks × 4 tiers × 
 ${SUPABASE_URL}/storage/v1/object/public/badges/{filename}.webp
 ```
 
-Hosted in the public `badges` Supabase Storage bucket. Existing per-category 4×3 art (legacy) can stay in the same bucket during transition.
+Hosted in the public `badges` Supabase Storage bucket. Profile frame files can live in the same bucket under a `tier_frame/` prefix or stay bundled in `assets/images/tier_frame/`.
 
 ### Render sizes in app
 
 - **Hero (badge card on Challenges → My Task):** 120 px square
-- **Card variant (rewards / ranks page):** 64 px
+- **Card variant (Badges page):** 64 px
 - **Chip variant (inline / history):** 32 px
+- **Profile picture frame:** wraps the avatar at avatar's display size (typically 40–96 px)
 
 React Native downscales the 360 px source for smaller surfaces — single asset covers all sizes.
 
@@ -184,23 +222,27 @@ React Native downscales the 360 px source for smaller surfaces — single asset 
 
 ## Database schema
 
-### `badges` table — [migration:401-411](supabase/migrations/20260417151509_remote_schema.sql#L401-L411)
+> Reflects locked schema migration plan in [`../plans/stars-and-extra-progress.plan.md`](../plans/stars-and-extra-progress.plan.md) Phase 1.
+
+### `badges` table — extended in Phase 1
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | int | PK |
-| `name` | text | Human-readable name (e.g. "Cafe Rank — Silver L2") |
-| `rank_kind` | text | `'visit' \| 'cafe' \| 'bar' \| 'restaurant' \| 'hotel' \| 'experience'` (extension to existing `category` column or new column) |
-| `tier` | text | `'bronze' \| 'silver' \| 'gold' \| 'platinum'` |
-| `level` | int | `1 \| 2 \| 3` |
-| `required_count` | int | Cycles (for Visit Rank) or visits (for category ranks) needed to unlock |
+| `name` | text | Human-readable name (e.g. "Cafe Badge — Silver L2") |
+| `category` | enum `badge_category` | Legacy column. Kept for backward compatibility; new logic uses `badge_kind`. |
+| `badge_kind` | text (new) | `'visit' \| 'cafe' \| 'bar' \| 'restaurant' \| 'hotel'` (Experience added later when category lands) |
+| `tier` | text (new) | `'bronze' \| 'silver' \| 'gold' \| 'platinum'` |
+| `level` | int (new) | `1 \| 2 \| 3` |
+| `required_count` | int | Tasks (for Visit Badge) or visits (for category badges) needed to unlock |
+| `selfie_url`, `receipt_url` | text | Legacy required-NOT-NULL columns. Pass empty strings for new badge rows. |
 | `description` | text? | Optional flavor text |
-| `is_active` | bool | Default `true` |
+| `is_active` | bool | Default `true`. Legacy seed rows flipped to `false` in migration. |
 | `created_at` | timestamptz |  |
 
-The legacy `category` column ([migration:20260423160047]) is being **superseded** by `rank_kind`. Migration plan: rename `category` → `rank_kind`, add `'visit'` as a valid value (replacing the old `'activity'`), backfill `tier` and `level` columns, drop legacy seed rows that don't match the new model.
+Legacy seed rows (First Visit, Coffee Lover, Bar Explorer, etc.) have `is_active = false` after migration — they remain in `user_badges` as historical data but don't drive new UI.
 
-### `user_badges` table — [migration:708-712](supabase/migrations/20260417151509_remote_schema.sql#L708-L712)
+### `user_badges` table — unchanged
 
 | Column | Type | Notes |
 |---|---|---|
@@ -220,55 +262,57 @@ PK is composite `(user_id, badge_id)` — duplicate awards are impossible.
 
 ## Trigger wiring
 
-### Visit Rank — on cycle close
+### Visit Badge — on cycle close
 
 When a user taps **Complete Tasks** on the Visit 10 card and the cycle closes:
 
 1. The active cycle in `visit_progress` is marked closed.
-2. A row is inserted into `vouchers` at the user's current Visit Rank tier (snapshot at mint time).
-3. Cumulative completed-cycle count is recomputed.
-4. The Visit Rank helper walks the active `badges` table where `rank_kind = 'visit'` and inserts matching `user_badges` rows.
-5. `trg_notify_on_badge_earned` fires a `notifications` row.
-6. A new cycle row is opened with progress 0/10.
+2. Cumulative completed-cycle count is recomputed.
+3. The Visit Badge helper walks the active `badges` rows where `badge_kind = 'visit'` and inserts matching `user_badges` rows for any newly-crossed thresholds.
+4. The **`mint_voucher_on_visit_levelup` trigger** fires on each new `user_badges` row with `badge_kind='visit'` and inserts a corresponding voucher row of that level's tier (Bronze L1 → Bronze voucher, Silver L2 → Silver voucher, etc.). Cycles between levels (4, 6, 8, 9, 11–14, 16–19, …) close cleanly without minting — only level thresholds (1, 2, 3, 5, 7, 10, 15, 20, 27, 35, 40, 45) mint.
+5. If the **tier** crossed (e.g. Bronze L3 → Silver L1), the user's profile picture frame swaps. Frame is derived from current Visit Badge tier — no separate write.
+6. `trg_notify_on_badge_earned` fires a `notifications` row.
+7. A new cycle row is opened with progress 0/10.
 
-### Per-category ranks — on submission approval
+### Category Badges — on submission approval
 
 When a submission flips to `approved`:
 
 1. Per-category counter increments (derived; no separate write).
-2. The category rank helper walks `badges` where `rank_kind = '{category}'` and inserts any newly-crossed thresholds.
+2. The category badge helper walks `badges` rows where `badge_kind = '{category}'` and inserts any newly-crossed thresholds into `user_badges`.
 3. `trg_notify_on_badge_earned` fires for each new badge.
 
-Approvals are final ([`credits-overview.md`](credits-overview.md) §"Approvals are final") — no claw-back logic on rank badges.
+Approvals are final ([`credits-overview.md`](credits-overview.md) §"Approvals are final") — no claw-back logic on badge awards.
 
 ---
 
 ## Implementation status
 
-- ✅ **Phase 1 backend foundation:** enum extensions for `bar` + `hotel`, `credits_ledger` + `vouchers` tables, `profiles.first_approved_submission_at` column with backfill.
-- ⚠️ The `badges` table still holds **legacy seed rows** (e.g. `First Visit` at `required_count=1`, per-category `Coffee Lover`, etc.). They need to be cleared or migrated to the new `rank_kind` model.
-- ⏳ **Schema migration** to rename `category` → `rank_kind`, add `tier` + `level` columns, seed 12 Visit Rank rows + 60 (or 24 with Strategy B) per-category rank rows.
+- ✅ **Profile picture frame assets received** (4 files in [`assets/images/tier_frame/`](../../assets/images/tier_frame/)) — minor filename cleanup pending.
+- ⏳ **Phase 1 schema migration** — drop legacy `credits_ledger` / `referral_half_credit_accumulator` / `vouchers`, evolve `badges` table, seed new badge rows. Per [`../plans/stars-and-extra-progress.plan.md`](../plans/stars-and-extra-progress.plan.md).
 - ⏳ **Manual claim flow** + `complete_visit_task` RPC + `_award_stars` + trade-button RPC pending.
-- ⏳ **Ranks page UI** showing all 6 ranks pending — see [`stars-and-extra-progress.plan.md`](../plans/stars-and-extra-progress.plan.md) Phase 7.
+- ⏳ **Badges page UI** showing all 5 badges pending — see plan Phase 7.
+- ⏳ **Visit Badge art (12 pieces)** pending from Kasey's team. Phase 7 ships with placeholder gradients if delayed.
 
 ---
 
 ## Legacy: per-category 4×3 system (phased out)
 
-The original system had 4 categories × 4 tiers × 3 ranks = 48 per-category badges with thresholds 5 → 120 approved submissions per category, plus a separate global tier from cumulative completed cycles. The new model:
+The original system had 4 categories × 4 tiers × 3 ranks = 48 per-category badges, plus a separate global tier from cumulative completed cycles. The new model:
 
-- **Drops** the separate global tier — replaced by Visit Rank using the same Bronze/Silver/Gold/Platinum structure.
-- **Keeps** per-category 4×3 progression but adds Experience as a fifth category and locks consistent thresholds (5/10/20/30/40/50/60/70/80/90/100/120) across all categories.
-- The `BADGE_REQUIREMENTS` constants in [config/badges.ts](config/badges.ts) and the `BADGE_CATEGORY_INFO` labels still apply but should be migrated to use the locked threshold table above.
-- `getCurrentBadge(approvedCount)` helper → replaced by `categoryRankFor(visits)` for category ranks and `visitRankFor(cycles)` for the new Visit Rank.
+- **Drops** the separate global tier — replaced by the Visit Badge using the same Bronze/Silver/Gold/Platinum × L1/L2/L3 structure.
+- **Keeps** per-category 4×3 progression with locked thresholds (5/10/20/30/40/50/60/70/80/90/100/120) across all four categories.
+- The `BADGE_REQUIREMENTS` constants in [`config/badges.ts`](../../config/badges.ts) and the `BADGE_CATEGORY_INFO` labels still apply but should be migrated to use the locked threshold table above.
+- `getCurrentBadge(approvedCount)` helper → replaced by `categoryBadgeFor(visits)` for category badges and `visitBadgeFor(tasksCompleted)` for the Visit Badge.
 
-The legacy badge UI at [components/verified-member/badges/index.tsx](components/verified-member/badges/index.tsx) is replaced by the new Ranks page in Phase 7 of the build plan.
+The legacy badge UI at [`components/verified-member/badges/index.tsx`](../../components/verified-member/badges/index.tsx) is replaced by the new Badges page in Phase 7 of the build plan.
 
 ---
 
 ## Still open
 
-- **Per-category rank rewards** — what does each tier crossing unlock? "Coming soon" per Kasey 2026-05-04.
-- **Hotel "bigger claims" reward** — Hotel has a per-category rank counter but no dedicated reward path.
+- **Category Badge rewards** — what does each tier crossing unlock? Pending vendor sponsorships. v1 ships progression-only on these tiles (no reward callout, no "Coming soon" wording).
+- **Hotel "bigger claims" reward** — Hotel has a category badge but no dedicated reward path beyond the future per-category sponsorship.
 - **Asset strategy choice** (A / B / C above) — defaults to C unless team pushes back.
-- **Badge seed migration plan** — clearing legacy rows in production needs a careful migration with the Phase 1 schema work.
+- **Profile frame filename rename** — `Goldd.webp` → `Gold.webp`, `Diamond.webp` → `Platinum.webp` (cosmetic, doesn't block build).
+- **Experience category** — when the `store_category` enum gains `experience`, add a 6th badge with the same threshold table.

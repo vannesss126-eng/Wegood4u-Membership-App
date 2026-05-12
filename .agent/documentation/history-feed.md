@@ -33,9 +33,9 @@ Both render identical rows; only the page size and the page-controls footer diff
 | `referral_qualified` | `star_ledger` rows with `reason IN ('l1_referral','l2_referral')` | inserted when invitee transitions to Active | `created_at` | `{invitee_name} qualified ({L1\|L2})` | `+100 ★` or `+50 ★` |
 | `stars_converted` | `star_ledger` rows with `reason = 'conversion_to_progress'` | user taps "Use 100 ★ for +1 Progress" trade button | `created_at` | `Stars → Visit 10 progress` | `+1 progress` |
 | `cycle_completed` | `visit_progress` | user taps Complete Tasks; `closed_at` set | `closed_at` | `Visit 10 Task completed` | `+1 voucher` |
-| `visit_rank_earned` | `user_badges JOIN badges` where `rank_kind='visit'` | new row | `earned_at` | `Visit Rank — {tier} L{level}` | — |
-| `category_rank_earned` | `user_badges JOIN badges` where `rank_kind IN ('cafe','bar','restaurant','hotel','experience')` | new row | `earned_at` | `{Category} Rank — {tier} L{level}` | — |
-| `voucher_redeemed` | `vouchers` | `redeemed_at IS NOT NULL` | `redeemed_at` | `Redeemed {reward_kind}` | — |
+| `visit_badge_earned` | `user_badges JOIN badges` where `badge_kind='visit'` | new row | `earned_at` | `Visit Badge — {tier} L{level}` | — |
+| `category_badge_earned` | `user_badges JOIN badges` where `badge_kind IN ('cafe','bar','restaurant','hotel')` | new row | `earned_at` | `{Category} Badge — {tier} L{level}` | — |
+| `voucher_redemption_requested` | `vouchers` | `redeemed_at IS NOT NULL` (user tapped Redeem; admin fulfills out-of-band in v1) | `redeemed_at` | `Requested {reward_kind} voucher` | — |
 
 The `metadata` shapes per type are documented in the RPC migration. Clients should treat unknown `event_type` values as forward-compat — future event types may join later.
 
@@ -61,9 +61,9 @@ RETURNS TABLE (event_type text, event_at timestamptz, target text, metadata json
 
 ### Migration state
 
-The current RPC ([20260426130000_fix_user_activity_ambiguous_column.sql](../../supabase/migrations/20260426130000_fix_user_activity_ambiguous_column.sql)) supports the legacy event set (`submission_approved`, `submission_rejected`, `badge_earned`, `task_completed`, `voucher_redeemed`).
+The current RPC ([20260426130000_fix_user_activity_ambiguous_column.sql](../../supabase/migrations/20260426130000_fix_user_activity_ambiguous_column.sql)) supports the legacy event set (`submission_approved`, `submission_rejected`, `badge_earned`, `task_completed`, `voucher_redeemed`). The next migration renames `voucher_redeemed` → `voucher_redemption_requested` to reflect the v1 admin-fulfilled flow (user requesting fulfillment, not actual redemption complete).
 
-A follow-up migration is required to add the new event types: `share_verified`, `daily_streak_milestone`, `referral_qualified`, `stars_converted`, `visit_rank_earned`, `category_rank_earned`, and to rename `task_completed` → `cycle_completed` to match the new model. That migration is **pending** — track in the implementation plan for the extra-tasks feature.
+A follow-up migration is required to add the new event types: `share_verified`, `daily_streak_milestone`, `referral_qualified`, `stars_converted`, `visit_badge_earned`, `category_badge_earned`, and to rename `task_completed` → `cycle_completed` to match the new model. That migration is **pending** — track in the implementation plan for the extra-tasks feature.
 
 ---
 
@@ -118,7 +118,7 @@ If hot-update on the standalone History page becomes important, the cheapest pat
 - **Conversion clustering.** When a wallet hits 100 from a share verification, both `share_verified` and `stars_converted` fire at near-identical timestamps. The History UI sorts strictly by `event_at DESC` and may interleave by milliseconds — intentional, not a bug.
 - **Cycle-close clustering.** A cycle reaching 10/10 + the user tapping Complete Tasks emits `cycle_completed`, possibly `badge_earned` (if a tier threshold was crossed), and a fresh `vouchers` row in quick succession. All three may surface as distinct History entries within seconds of each other.
 - **Submissions cannot be reverted approved → rejected** (locked 2026-05-04, [`credits-overview.md`](credits-overview.md) §"Approvals are final"). The flip case no longer applies — once approved, the History row stays as `submission_approved` permanently.
-- **Vouchers earned but never redeemed.** They do **not** appear in History — they appear in the **Rewards** subtab as redeemable items. Only the `redeemed_at` transition emits a History event.
+- **Vouchers earned but never redeemed.** They do **not** appear in History — they appear in the **Rewards** subtab as redeemable items. Only the `redeemed_at` transition (user tapped Redeem) emits a History event. Admin's out-of-band fulfillment is not tracked in History in v1.
 - **Streak resets.** A missed day resets `profiles.current_streak` to 0 silently — no History entry is written for the reset (only for milestones).
 
 ---
@@ -130,7 +130,7 @@ If hot-update on the standalone History page becomes important, the cheapest pat
 | `20260423160050_user_activity_rpc.sql` | First version. Returned only event rows; UI computed total via a second query. |
 | `20260423160051_user_activity_total_count.sql` | Added `total_count` window column. Introduced the latent `event_at` ambiguity bug. |
 | `20260426130000_fix_user_activity_ambiguous_column.sql` | Current. Adds `#variable_conflict use_column` and fully qualifies CTE references. |
-| _(pending)_ | Add `share_verified`, `daily_streak_milestone`, `referral_qualified`, `stars_converted`, `visit_rank_earned`, `category_rank_earned` event types; rename `task_completed` → `cycle_completed`; split badge events by rank kind. |
+| _(pending)_ | Add `share_verified`, `daily_streak_milestone`, `referral_qualified`, `stars_converted`, `visit_badge_earned`, `category_badge_earned` event types; rename `task_completed` → `cycle_completed`; split badge events by `badge_kind`. |
 
 Earlier migrations are left in the chain for replay correctness; the current function definition is whatever the latest `CREATE OR REPLACE` ran.
 

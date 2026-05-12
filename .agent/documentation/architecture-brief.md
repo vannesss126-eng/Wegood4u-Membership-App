@@ -3,25 +3,7 @@
 
 ---
 
-## What this app does
-A travel proof submission app where shop users submit photo evidence of travel (up to 20 submissions/day per user). Admins/shop owners review and approve or reject each submission.
-
----
-
-## Current backend: Supabase (Free tier)
-- Auth, database (Postgres), RLS policies, and storage are all on Supabase
-- RLS policies are already set up and working — do not break or rewrite these
-- There is an existing RLS policy limiting each user to 20 proof-of-travel submissions per day (previously 10, updated to 20)
-
----
-
-## Scale targets
-| Stage | Users | Submissions/day |
-|---|---|---|
-| Phase 1 (now) | ~900–1,500 (30–50 shops × 30 users) | up to 20/user/day |
-| Phase 2 | ~4,500 (150 shops) | up to 20/user/day |
-| Full scale | ~27,000–30,000 MAU | up to 20/user/day |
-| Long-term target | ~200,000 MAU | 10/user/day active users |
+![1778349168983](image/architecture-brief/1778349168983.png)
 
 ---
 
