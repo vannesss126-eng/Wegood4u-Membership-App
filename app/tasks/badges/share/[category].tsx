@@ -16,14 +16,17 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { useUser } from '@/context/UserContext';
 import {
-  useTasks,
-  type BadgeTier,
-  type BadgeLevel,
-} from '@/hooks/useTasks';
+  useVisitBadge,
+  type VisitBadgeTier as BadgeTier,
+  type VisitBadgeLevel as BadgeLevel,
+} from '@/hooks/useVisitBadge';
+import { useCategoryStats, type StoreCategory } from '@/hooks/useCategoryStats';
 import { BADGE_TIER_COLORS } from '@/config/badges';
+import {
+  getBadgeAsset,
+  type CategoryAssetKey,
+} from '@/lib/badgeAssets';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const BADGES_BUCKET_URL = `${SUPABASE_URL}/storage/v1/object/public/badges`;
 const BAR_GREEN = '#206E56';
 
 const CATEGORY_LABELS: Record<string, { label: string; assetKey: string }> = {
@@ -45,10 +48,6 @@ function tierAssetKey(tier: BadgeTier): 'Bronze' | 'Silver' | 'Gold' | 'Platinum
     | 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
 }
 
-function badgeImageUrl(assetKey: string, tier: BadgeTier, level: BadgeLevel) {
-  return `${BADGES_BUCKET_URL}/${assetKey}_${tierAssetKey(tier)}_${level}-min.webp`;
-}
-
 function formatJoinedDate(iso: string | null): string {
   if (!iso) return '';
   try {
@@ -66,16 +65,19 @@ export default function BadgeShareScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ category: string }>();
   const { userData } = useUser();
-  const { categories, tier, level, isLoading } = useTasks(userData?.id);
+  const { tier, level, isLoading: badgeLoading } = useVisitBadge(userData?.id);
+  const { counts, isLoading: statsLoading } = useCategoryStats(userData?.id);
+  const isLoading = badgeLoading || statsLoading;
 
   const cardRef = useRef<View>(null);
-  const [imageFailed, setImageFailed] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
   const categoryKey = (params.category ?? 'restaurant').toLowerCase();
   const categoryInfo = CATEGORY_LABELS[categoryKey] ?? CATEGORY_LABELS.restaurant;
-  const cat = categories[categoryKey as keyof typeof categories];
-  const totalVisits = cat?.totalApprovedSubmissions ?? 0;
+  const totalVisits = counts[categoryKey as StoreCategory] ?? 0;
+  const badgeSource = tier && level
+    ? getBadgeAsset(categoryInfo.assetKey as CategoryAssetKey, tierAssetKey(tier), level)
+    : null;
 
   const displayName = userData?.fullName || userData?.username || 'Member';
   const tierStyle = tier
@@ -126,11 +128,10 @@ export default function BadgeShareScreen() {
         ) : (
           <View ref={cardRef} collapsable={false} style={styles.card}>
             <View style={styles.cardArtFrame}>
-              {tier && level && !imageFailed ? (
+              {badgeSource ? (
                 <Image
-                  source={{ uri: badgeImageUrl(categoryInfo.assetKey, tier, level) }}
+                  source={badgeSource}
                   style={styles.cardArt}
-                  onError={() => setImageFailed(true)}
                   resizeMode="contain"
                 />
               ) : (

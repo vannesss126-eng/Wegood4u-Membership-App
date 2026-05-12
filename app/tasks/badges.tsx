@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -8,19 +8,25 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Share2, Award } from 'lucide-react-native';
 import { useUser } from '@/context/UserContext';
 import {
-  useTasks,
-  type BadgeTier,
-  type BadgeLevel,
-} from '@/hooks/useTasks';
+  useVisitBadge,
+  type VisitBadgeTier as BadgeTier,
+  type VisitBadgeLevel as BadgeLevel,
+} from '@/hooks/useVisitBadge';
 import { BADGE_TIER_COLORS } from '@/config/badges';
+import {
+  getBadgeAsset,
+  type CategoryAssetKey,
+} from '@/lib/badgeAssets';
+import { getVisitRankAsset } from '@/lib/visitRankAssets';
+import { useCategoryStats, type StoreCategory } from '@/hooks/useCategoryStats';
+import { categoryBadgeFor } from '@/lib/categoryBadgeTiers';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const BADGES_BUCKET_URL = `${SUPABASE_URL}/storage/v1/object/public/badges`;
 const BAR_GREEN = '#206E56';
 
 // Categories rendered as separate scrollable rows. Filename casing matches
@@ -56,16 +62,17 @@ function tierAssetKey(tier: BadgeTier): 'Bronze' | 'Silver' | 'Gold' | 'Platinum
     | 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
 }
 
-function badgeImageUrl(category: string, tier: BadgeTier, level: BadgeLevel) {
-  return `${BADGES_BUCKET_URL}/${category}_${tierAssetKey(tier)}_${level}-min.webp`;
-}
-
 export default function BadgeDetailScreen() {
   const router = useRouter();
   const { userData } = useUser();
-  const { tier, level, isLoading } = useTasks(userData?.id);
+  const { tier, level, cyclesToNextLevel, isLoading: visitLoading } = useVisitBadge(userData?.id);
+  const { counts, isLoading: statsLoading } = useCategoryStats(userData?.id);
+  const isLoading = visitLoading || statsLoading;
 
-  const currentIdx = linearIndex(tier, level);
+  const visitIdx = linearIndex(tier, level);
+  const visitProgressLine = cyclesToNextLevel === null
+    ? 'Max tier reached — Platinum L3'
+    : `${cyclesToNextLevel} cycle${cyclesToNextLevel === 1 ? '' : 's'} to next level`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -85,41 +92,57 @@ export default function BadgeDetailScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {CATEGORIES.map((cat) => (
-            <CategorySection
-              key={cat.key}
-              categoryKey={cat.key}
-              label={cat.label}
-              assetKey={cat.assetKey}
-              currentIdx={currentIdx}
-              onShare={() =>
-                router.push({
-                  pathname: '/tasks/badges/share/[category]' as never,
-                  params: { category: cat.key } as never,
-                })
-              }
-            />
-          ))}
+          <BadgeSection
+            label="Visit Badge"
+            currentIdx={visitIdx}
+            progressLine={visitProgressLine}
+            resolveSource={(t, l) => getVisitRankAsset(tierAssetKey(t), l)}
+          />
+          {CATEGORIES.map((cat) => {
+            const count = counts[cat.key as StoreCategory] ?? 0;
+            const cb = categoryBadgeFor(count);
+            const progressLine = cb.countToNextLevel === null
+              ? 'Max tier reached — Platinum L3'
+              : `${count} / ${cb.nextLevelMin} approved visit${count === 1 ? '' : 's'} to next level`;
+            return (
+              <BadgeSection
+                key={cat.key}
+                label={cat.label}
+                currentIdx={cb.currentIdx}
+                progressLine={progressLine}
+                resolveSource={(t, l) =>
+                  getBadgeAsset(cat.assetKey as CategoryAssetKey, tierAssetKey(t), l)
+                }
+                onShare={() =>
+                  router.push({
+                    pathname: '/tasks/badges/share/[category]' as never,
+                    params: { category: cat.key } as never,
+                  })
+                }
+              />
+            );
+          })}
         </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
-interface CategorySectionProps {
-  categoryKey: string;
+interface BadgeSectionProps {
   label: string;
-  assetKey: string;
   currentIdx: number;
-  onShare: () => void;
+  progressLine?: string;
+  resolveSource: (tier: BadgeTier, level: BadgeLevel) => ImageSourcePropType | null;
+  onShare?: () => void;
 }
 
-function CategorySection({
+function BadgeSection({
   label,
-  assetKey,
   currentIdx,
+  progressLine,
+  resolveSource,
   onShare,
-}: CategorySectionProps) {
+}: BadgeSectionProps) {
   const railFillPct =
     currentIdx < 0 ? 0 : ((currentIdx + 1) / TIER_LEVEL_ORDER.length) * 100;
 
@@ -127,9 +150,11 @@ function CategorySection({
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>{label}</Text>
-        <TouchableOpacity style={styles.shareButton} onPress={onShare}>
-          <Share2 size={18} color={BAR_GREEN} />
-        </TouchableOpacity>
+        {onShare && (
+          <TouchableOpacity style={styles.shareButton} onPress={onShare}>
+            <Share2 size={18} color={BAR_GREEN} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -145,7 +170,7 @@ function CategorySection({
               key={`${entry.tier}-${entry.level}`}
               tier={entry.tier}
               level={entry.level}
-              assetKey={assetKey}
+              source={resolveSource(entry.tier, entry.level)}
               earned={earned}
               isCurrent={isCurrent}
             />
@@ -156,6 +181,10 @@ function CategorySection({
       <View style={styles.rail}>
         <View style={[styles.railFill, { width: `${railFillPct}%` }]} />
       </View>
+
+      {progressLine && (
+        <Text style={styles.progressLine}>{progressLine}</Text>
+      )}
     </View>
   );
 }
@@ -163,15 +192,13 @@ function CategorySection({
 interface BadgeTileProps {
   tier: BadgeTier;
   level: BadgeLevel;
-  assetKey: string;
+  source: ImageSourcePropType | null;
   earned: boolean;
   isCurrent: boolean;
 }
 
-function BadgeTile({ tier, level, assetKey, earned, isCurrent }: BadgeTileProps) {
-  const [imageFailed, setImageFailed] = useState(false);
+function BadgeTile({ tier, level, source, earned, isCurrent }: BadgeTileProps) {
   const tierColors = BADGE_TIER_COLORS[tierAssetKey(tier)];
-  const url = badgeImageUrl(assetKey, tier, level);
 
   return (
     <View style={styles.tileCol}>
@@ -182,11 +209,10 @@ function BadgeTile({ tier, level, assetKey, earned, isCurrent }: BadgeTileProps)
           !earned && styles.tileFrameLocked,
         ]}
       >
-        {!imageFailed ? (
+        {source ? (
           <Image
-            source={{ uri: url }}
+            source={source}
             style={[styles.tileImage, !earned && styles.tileImageLocked]}
-            onError={() => setImageFailed(true)}
             resizeMode="contain"
           />
         ) : (
@@ -347,5 +373,12 @@ const styles = StyleSheet.create({
   railFill: {
     height: 4,
     backgroundColor: BAR_GREEN,
+  },
+  progressLine: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 8,
+    marginHorizontal: 4,
   },
 });

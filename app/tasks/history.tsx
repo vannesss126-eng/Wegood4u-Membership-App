@@ -10,7 +10,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { useActivity, type ActivityEvent } from '@/hooks/useActivity';
+import { useActivity } from '@/hooks/useActivity';
+import { describeActivityEvent } from '@/lib/activityEvent';
 
 const PAGE_SIZE = 10;
 const BAR_GREEN = '#206E56';
@@ -21,45 +22,6 @@ function formatDate(iso: string): string {
   } catch {
     return '';
   }
-}
-
-interface RowDescriptor {
-  date: string;
-  target: string;
-  status: { text: string; tone: 'approved' | 'rejected' | 'neutral' } | null;
-  trailing: string | null;
-}
-
-function describe(event: ActivityEvent): RowDescriptor {
-  const date = formatDate(event.event_at);
-  let target = event.target;
-  let status: RowDescriptor['status'] = null;
-  let trailing: string | null = null;
-
-  switch (event.event_type) {
-    case 'submission_approved':
-      status = { text: 'Approved', tone: 'approved' };
-      trailing = '+1 credit';
-      break;
-    case 'submission_rejected':
-      status = { text: 'Rejected', tone: 'rejected' };
-      break;
-    case 'badge_earned':
-      target = `Earned ${event.target}`;
-      break;
-    case 'task_completed': {
-      const cat = (event.metadata?.category as string | undefined) ?? '';
-      const label = cat ? cat[0].toUpperCase() + cat.slice(1) : 'Task';
-      target = `${label} Task Completed`;
-      trailing = '+1 voucher';
-      break;
-    }
-    case 'voucher_redeemed':
-      target = `Redeemed ${event.target}`;
-      break;
-  }
-
-  return { date, target, status, trailing };
 }
 
 export default function HistoryScreen() {
@@ -113,10 +75,11 @@ export default function HistoryScreen() {
           <Text style={styles.emptyText}>No activity yet.</Text>
         ) : (
           events.map((event, i) => {
-            const row = describe(event);
+            const row = describeActivityEvent(event);
+            const date = formatDate(event.event_at);
             return (
               <View key={`${event.event_type}-${event.event_at}-${i}`} style={styles.tableRow}>
-                <Text style={styles.cellDate}>{row.date}</Text>
+                <Text style={styles.cellDate}>{date}</Text>
                 <Text style={styles.cellTarget} numberOfLines={2}>
                   {row.target}
                 </Text>
@@ -132,7 +95,9 @@ export default function HistoryScreen() {
                       {row.status.text}
                     </Text>
                   )}
-                  {row.trailing && <Text style={styles.trailingText}>{row.trailing}</Text>}
+                  {row.trailing && (
+                    <Text style={styles.trailingText}>{row.trailing.text}</Text>
+                  )}
                 </View>
               </View>
             );
