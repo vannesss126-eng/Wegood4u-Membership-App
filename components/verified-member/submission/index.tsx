@@ -14,6 +14,7 @@ import { Camera, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { optimizeSubmissionImage } from '@/lib/optimizeSubmissionImage';
 import type { PartnerStore } from '@/types';
+import ShareEarnCard from '@/components/submission/ShareEarnCard';
 
 interface SubmissionProps {
   userData: any;
@@ -428,6 +429,9 @@ export default function SubmissionComponent({
 
   return (
     <View style={styles.submitContainer}>
+      {/* Share & earn entry — surfaces only when the user has approved trips */}
+      <ShareEarnCard />
+
       {/* 1. Date Visit */}
       <View style={styles.card}>
         <View style={styles.cardHeader}>

@@ -6,6 +6,8 @@ import Submission from './submission';
 import Rewards from './rewards';
 import MyTasks from './my-tasks';
 import { useUserSubmissions } from '@/hooks/useSubmissions';
+import { useStarWallet } from '@/hooks/useStarWallet';
+import StarWalletPill from './my-tasks/StarWalletPill';
 import type { PartnerStore } from '@/types';
 
 interface VerifiedMemberProps {
@@ -28,9 +30,15 @@ export default function VerifiedMember({
   const [activeTab, setActiveTab] = useState<TabKey>('my-tasks');
 
   const { refetch: fetchSubmissions } = useUserSubmissions(userData?.id);
+  const { balance: starBalance } = useStarWallet(userData?.id);
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.pageHeader}>
+        <Text style={styles.pageTitle}>Tasks</Text>
+        <StarWalletPill balance={starBalance} />
+      </View>
+
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'my-tasks' && styles.activeTab]}
@@ -94,6 +102,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#0E1410',
+    letterSpacing: -0.4,
   },
   tabContainer: {
     flexDirection: 'row',
