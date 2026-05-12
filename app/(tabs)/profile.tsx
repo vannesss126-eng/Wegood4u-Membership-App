@@ -21,6 +21,8 @@ import { uploadProfileImage, updateUserAvatar } from '@/services/imageUpload'
 import { router } from 'expo-router';
 import SettingsOverlay from '@/app/profile/SettingsOverlay';
 import LoginRequiredScreen from '@/components/LoginRequiredScreen';
+import ProfileFrame from '@/components/profile/ProfileFrame';
+import { useVisitBadge } from '@/hooks/useVisitBadge';
 
 export default function ProfileScreen() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -41,6 +43,9 @@ export default function ProfileScreen() {
     pendingCount,
     isLoading: isLoadingPending
   } = usePendingSubmissionsCount();
+
+  // Visit Badge tier drives the avatar frame.
+  const { tier: visitTier } = useVisitBadge(userData?.id);
 
   // Fetch today's submission count for the user
   const fetchDailySubmissionCount = async () => {
@@ -204,16 +209,17 @@ export default function ProfileScreen() {
 
         {/* Profile Section */}
         <View style={styles.profileSection}>
-          <TouchableOpacity 
-            style={styles.profileImageContainer} 
+          <TouchableOpacity
+            style={styles.profileImageContainer}
             onPress={pickProfileImage}
             disabled={isUploadingImage}
           >
-            <Image 
-              source={{ 
-                uri: userData.avatarUrl || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400' 
-              }} 
-              style={styles.profileImage} 
+            <ProfileFrame
+              avatarUri={userData.avatarUrl ||
+                'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=400'
+              }
+              tier={visitTier}
+              size={120}
             />
             <View style={[styles.cameraIcon, isUploadingImage && styles.cameraIconLoading]}>
               {isUploadingImage ? (
@@ -258,15 +264,10 @@ export default function ProfileScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <SquareCheckBig size={20} color="#22C55E" />
-                <View style={styles.statNumberContainer}>
-                  <Text style={styles.statNumber}>
-                    {isLoadingSubmissions ? '...' : dailySubmissionCount}
-                  </Text>
-                  <Text style={styles.statNumberMax}>
-                    /{isLoadingSubmissions ? '...' : 20}
-                  </Text>
-                </View>
-                <Text style={styles.statLabel}>Today</Text>
+                <Text style={styles.statNumber}>
+                  {isLoadingSubmissions ? '...' : stats.approved}
+                </Text>
+                <Text style={styles.statLabel}>Submission</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
