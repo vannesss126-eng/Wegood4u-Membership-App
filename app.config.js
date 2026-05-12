@@ -13,9 +13,10 @@ module.exports = {
       backgroundColor: "#ffffff"
     },
     assetBundlePatterns: [
-      "assets/images/*.png",
-      "assets/images/*.jpg",
-      "assets/images/*.jpeg"
+      "assets/images/**/*.png",
+      "assets/images/**/*.jpg",
+      "assets/images/**/*.jpeg",
+      "assets/images/**/*.webp"
     ],
     ios: {
       supportsTablet: true,
