@@ -9,15 +9,18 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  ArrowLeft, 
-  Bell, 
-  CheckCheck, 
-  Trash2, 
+import {
+  ArrowLeft,
+  Bell,
+  CheckCheck,
+  Trash2,
   RefreshCw,
   FileText,
   Store,
   Award,
+  Star,
+  UserPlus,
+  Ticket,
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useUser } from '@/context/UserContext';
@@ -97,10 +100,18 @@ export default function NotificationsScreen() {
         router.push('/tasks');
         break;
       case 'badge':
-        router.push('/tasks'); // Navigate to rewards tab
+        router.push('/tasks/badges' as never);
+        break;
+      case 'share':
+        router.push('/submission/shares' as never);
+        break;
+      case 'referral':
+        router.push('/profile/invite-friends' as never);
+        break;
+      case 'voucher':
+        router.push('/tasks'); // Rewards subtab
         break;
       default:
-        // Just mark as read for other types
         break;
     }
   };
@@ -115,14 +126,20 @@ export default function NotificationsScreen() {
         return <Award size={20} color="#F59E0B" />;
       case 'submission_created':
         return <Store size={20} color="#3B82F6" />;
+      case 'share_verified':
+        return <Star size={20} color="#E5A93D" fill="#E5A93D" />;
+      case 'referral_qualified':
+        return <UserPlus size={20} color="#206E56" />;
+      case 'voucher_redemption_requested':
+        return <Ticket size={20} color="#206E56" />;
       default:
         return <Bell size={20} color="#64748B" />;
     }
   };
 
   const getNotificationMessage = (notification: Notification) => {
-    const actorName = notification.actor_profile?.full_name || 
-                     notification.actor_profile?.username || 
+    const actorName = notification.actor_profile?.full_name ||
+                     notification.actor_profile?.username ||
                      'Someone';
 
     switch (notification.action) {
@@ -134,8 +151,28 @@ export default function NotificationsScreen() {
         return `Congratulations! You've earned the "${notification.data?.badge_name}" badge!`;
       case 'submission_created':
         return `New submission received from ${actorName}`;
+      case 'share_verified': {
+        const platform = notification.data?.platform;
+        const platformLabel = typeof platform === 'string'
+          ? platform[0].toUpperCase() + platform.slice(1)
+          : 'a platform';
+        const stars = notification.data?.stars_awarded ?? 15;
+        return `+${stars} ★ — your ${platformLabel} share was verified.`;
+      }
+      case 'referral_qualified': {
+        const inviteeName = notification.data?.invitee_name || 'A friend';
+        const level = notification.data?.level === 'L2' ? 'L2 affiliate' : 'L1 referral';
+        const stars = notification.data?.stars_awarded ?? 100;
+        return `${inviteeName} qualified — +${stars} ★ for your ${level}.`;
+      }
+      case 'voucher_redemption_requested': {
+        const tier = notification.data?.tier
+          ? String(notification.data.tier)[0].toUpperCase() + String(notification.data.tier).slice(1)
+          : '';
+        return `Your ${tier} voucher request was received. Our team will reach out via WhatsApp.`;
+      }
       default:
-        return notification.action.replace('_', ' ');
+        return notification.action.replace(/_/g, ' ');
     }
   };
 
