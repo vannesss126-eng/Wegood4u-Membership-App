@@ -4,9 +4,14 @@ import { supabase } from '@/lib/supabase';
 export type ActivityEventType =
   | 'submission_approved'
   | 'submission_rejected'
-  | 'badge_earned'
-  | 'task_completed'
-  | 'voucher_redeemed';
+  | 'share_verified'
+  | 'daily_streak_milestone'
+  | 'referral_qualified'
+  | 'stars_converted'
+  | 'cycle_completed'
+  | 'visit_badge_earned'
+  | 'category_badge_earned'
+  | 'voucher_redemption_requested';
 
 export interface ActivityEvent {
   event_type: ActivityEventType;
