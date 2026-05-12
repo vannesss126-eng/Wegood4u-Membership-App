@@ -26,10 +26,15 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { usePendingSubmissionsPaginated } from '@/hooks/useSubmissions';
+import RedeemReqTab from './RedeemReqTab';
+import { supabase } from '@/lib/supabase';
+import { Ticket } from 'lucide-react-native';
 
 interface AdminTaskScreenProps {
   userData: any;
 }
+
+type AdminTab = 'submission' | 'redeem';
 
 /** Phone: 3 submissions per page; tablet (min side ≥ 600): 6 per page */
 const TABLET_MIN_SHORT_SIDE = 600;
@@ -37,9 +42,34 @@ const TABLET_MIN_SHORT_SIDE = 600;
 export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalVisible, setImageModalVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<AdminTab>('submission');
+  const [pendingRedeemCount, setPendingRedeemCount] = useState<number>(0);
   const { width, height } = useWindowDimensions();
   const minSide = Math.min(width, height);
   const pageSize = minSide >= TABLET_MIN_SHORT_SIDE ? 6 : 3;
+
+  // Lightweight count query for the Redeem Req tab badge.
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchCount = async () => {
+      const { count } = await supabase
+        .from('vouchers')
+        .select('id', { count: 'exact', head: true })
+        .not('redeemed_at', 'is', null)
+        .is('fulfilled_at', null);
+      if (!cancelled) setPendingRedeemCount(count ?? 0);
+    };
+    fetchCount();
+    const channel = supabase
+      .channel('admin_redeem_count')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vouchers' },
+        () => fetchCount(),
+      )
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, []);
 
   // Use the custom hook for pending submissions (page-by-page, not infinite scroll)
   const {
@@ -151,6 +181,36 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
         </View>
       </View>
 
+      {/* Tabs: Submission | Redeem Req */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'submission' && styles.tabActive]}
+          onPress={() => setActiveTab('submission')}
+        >
+          <CheckCircle size={16} color={activeTab === 'submission' ? '#206E56' : '#94A3B8'} />
+          <Text style={[styles.tabText, activeTab === 'submission' && styles.tabTextActive]}>
+            Submission
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'redeem' && styles.tabActive]}
+          onPress={() => setActiveTab('redeem')}
+        >
+          <Ticket size={16} color={activeTab === 'redeem' ? '#206E56' : '#94A3B8'} />
+          <Text style={[styles.tabText, activeTab === 'redeem' && styles.tabTextActive]}>
+            Redeem Req
+          </Text>
+          {pendingRedeemCount > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{pendingRedeemCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'redeem' ? (
+        <RedeemReqTab />
+      ) : (
       <FlatList
         style={styles.content}
         data={pendingSubmissions}
@@ -355,6 +415,7 @@ export default function AdminTaskScreen({ userData }: AdminTaskScreenProps) {
               </View>
         )}
       />
+      )}
 
       {/* Image Modal */}
       <Modal
@@ -398,6 +459,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748B',
   },
+
+  // Admin tab bar (Submission | Redeem Req)
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tabActive: {
+    backgroundColor: '#E6F4EE',
+    borderColor: '#206E56',
+  },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#94A3B8' },
+  tabTextActive: { color: '#206E56' },
+  tabBadge: {
+    backgroundColor: '#EF4444',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
