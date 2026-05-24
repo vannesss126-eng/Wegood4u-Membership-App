@@ -1,60 +1,74 @@
-import {
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  type DocumentData,
-} from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { supabase } from '@/lib/supabase';
 import type { PartnerStore, GroupedStores } from '@/types';
 
-function mapDocToPartnerStore(docId: string, data: DocumentData): PartnerStore | null {
-  if (!data.name || !data.city) {
+type PartnerStoreRow = {
+  id: string;
+  name: string;
+  type: string | null;
+  city: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  rating: number | null;
+  image: string | null;
+  phone: string | null;
+  hours: string | null;
+  description: string | null;
+  price_range: string | null;
+  days: string | null;
+  menu_images: string[] | null;
+  active: boolean;
+};
+
+function mapRowToPartnerStore(row: PartnerStoreRow): PartnerStore | null {
+  if (!row.name || !row.city) {
     return null;
   }
 
   return {
-    id: docId,
-    name: data.name || '',
-    type: data.type || '',
-    city: data.city || '',
-    address: typeof data.address === 'string' ? data.address : '',
-    latitude: typeof data.latitude === 'number' ? data.latitude : 0,
-    longitude: typeof data.longitude === 'number' ? data.longitude : 0,
-    rating: typeof data.rating === 'number' ? data.rating : 0,
-    image: data.image || '',
-    phone: data.phone || '',
-    hours: data.hours || '',
-    description: data.description || '',
-    days: data.days,
-    priceRange: data.priceRange,
-    'menu-images': data['menu-images'],
+    id: row.id,
+    name: row.name,
+    type: row.type ?? '',
+    city: row.city,
+    address: row.address ?? '',
+    latitude: row.latitude ?? 0,
+    longitude: row.longitude ?? 0,
+    rating: row.rating ?? 0,
+    image: row.image ?? '',
+    phone: row.phone ?? '',
+    hours: row.hours ?? '',
+    description: row.description ?? '',
+    days: row.days ?? undefined,
+    priceRange: row.price_range ?? undefined,
+    'menu-images': row.menu_images ?? undefined,
   };
 }
 
 /**
- * Fetches all partner stores from Firestore
+ * Fetches all partner stores from Supabase.
  * @returns Promise<PartnerStore[]> Array of partner stores
  */
 export const fetchPartnerStores = async (): Promise<PartnerStore[]> => {
   try {
-    if (!db) {
-      throw new Error('Firebase database not initialized');
+    const { data, error } = await supabase
+      .from('partner_stores')
+      .select('*');
+
+    if (error) {
+      console.error('Error fetching partner stores:', error);
+      console.log('Returning empty stores array due to error');
+      return [];
     }
 
-    const partnerStoresCollection = collection(db, 'partner_store');
-    const querySnapshot = await getDocs(partnerStoresCollection);
-
     const partnerStores: PartnerStore[] = [];
-
-    querySnapshot.forEach((docSnap) => {
-      const mapped = mapDocToPartnerStore(docSnap.id, docSnap.data());
+    for (const row of (data ?? []) as PartnerStoreRow[]) {
+      const mapped = mapRowToPartnerStore(row);
       if (!mapped) {
-        console.warn(`Skipping store with invalid data: ${docSnap.id}`);
-        return;
+        console.warn(`Skipping store with invalid data: ${row.id}`);
+        continue;
       }
       partnerStores.push(mapped);
-    });
+    }
 
     console.log(`Successfully loaded ${partnerStores.length} partner stores`);
     return partnerStores;
@@ -66,23 +80,31 @@ export const fetchPartnerStores = async (): Promise<PartnerStore[]> => {
 };
 
 /**
- * Fetches a single partner store by Firestore document id.
+ * Fetches a single partner store by id (preserved Firestore doc id).
  * @returns The store or null if missing, invalid, or on error.
  */
 export const fetchPartnerStoreById = async (id: string): Promise<PartnerStore | null> => {
-  if (!db || !id?.trim()) {
+  if (!id?.trim()) {
     return null;
   }
 
   try {
-    const ref = doc(db, 'partner_store', id);
-    const snapshot = await getDoc(ref);
+    const { data, error } = await supabase
+      .from('partner_stores')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-    if (!snapshot.exists()) {
+    if (error) {
+      console.error('Error fetching partner store by id:', error);
       return null;
     }
 
-    return mapDocToPartnerStore(snapshot.id, snapshot.data());
+    if (!data) {
+      return null;
+    }
+
+    return mapRowToPartnerStore(data as PartnerStoreRow);
   } catch (error) {
     console.error('Error fetching partner store by id:', error);
     return null;
@@ -90,9 +112,7 @@ export const fetchPartnerStoreById = async (id: string): Promise<PartnerStore | 
 };
 
 /**
- * Groups partner stores by city
- * @param stores Array of partner stores
-  * @returns GroupedStores Stores grouped by city
+ * Groups partner stores by city.
  */
 export const groupStoresByCity = (stores: PartnerStore[]): GroupedStores => {
   return stores.reduce((acc: GroupedStores, store) => {
@@ -105,9 +125,7 @@ export const groupStoresByCity = (stores: PartnerStore[]): GroupedStores => {
 };
 
 /**
- * Gets unique cities from partner stores
- * @param stores Array of partner stores
- * @returns string[] Array of unique city names
+ * Gets unique cities from partner stores.
  */
 export const getUniqueCities = (stores: PartnerStore[]): string[] => {
   const cities = stores.map(store => store.city);
