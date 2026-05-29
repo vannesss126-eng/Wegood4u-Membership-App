@@ -66,13 +66,18 @@ const PromoBannerCarousel = ({ promoBanners }: { promoBanners: Banner[] }) => {
         }}
       >
         {promoBanners.map((banner) => (
-          <View key={banner.object_name} style={styles.promoCard}>
+          <TouchableOpacity
+            key={banner.object_name}
+            style={styles.promoCard}
+            activeOpacity={0.85}
+            onPress={() => router.push(`/partner-store/${banner.category}`)}
+          >
             <Image
               source={{ uri: banner.public_url }}
               style={styles.promoImage}
               resizeMode="cover"
             />
-          </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
       <View style={styles.paginationContainer}>
