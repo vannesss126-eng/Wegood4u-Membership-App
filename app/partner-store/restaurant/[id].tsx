@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import * as Location from 'expo-location';
 import PartnerStoreDetailContent from '@/components/partner-store/PartnerStoreDetailContent';
 import { fetchPartnerStoreById } from '@/data/partnerStore';
 import {
@@ -8,6 +7,7 @@ import {
   haversineDistanceM,
   isValidCoordinatePair,
 } from '@/lib/distance';
+import { useUserLocation } from '@/lib/userLocation';
 import type { PartnerStore } from '@/types';
 
 export default function RestaurantStoreDetailScreen() {
@@ -17,7 +17,7 @@ export default function RestaurantStoreDetailScreen() {
   const [store, setStore] = useState<PartnerStore | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [distanceLabel, setDistanceLabel] = useState('Loading distance...');
+  const userLocation = useUserLocation();
 
   useEffect(() => {
     let isMounted = true;
@@ -54,57 +54,21 @@ export default function RestaurantStoreDetailScreen() {
     };
   }, [storeId]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const distanceLabel = useMemo(() => {
+    if (
+      !store ||
+      !userLocation ||
+      !isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude })
+    ) {
+      return 'Loading distance...';
+    }
 
-    const loadDistance = async () => {
-      if (!store || !isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude })) {
-        if (isMounted) {
-          setDistanceLabel('Loading distance...');
-        }
-        return;
-      }
-
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (isMounted) {
-            setDistanceLabel('Loading distance...');
-          }
-          return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-
-        const distanceM = haversineDistanceM(
-          {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          },
-          {
-            latitude: store.latitude,
-            longitude: store.longitude,
-          }
-        );
-
-        if (isMounted) {
-          setDistanceLabel(`${formatDistanceM(distanceM)} from your current location`);
-        }
-      } catch {
-        if (isMounted) {
-          setDistanceLabel('Loading distance...');
-        }
-      }
-    };
-
-    loadDistance();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [store]);
+    const distanceM = haversineDistanceM(userLocation, {
+      latitude: store.latitude,
+      longitude: store.longitude,
+    });
+    return `${formatDistanceM(distanceM)} from your current location`;
+  }, [store, userLocation]);
 
   return (
     <PartnerStoreDetailContent
