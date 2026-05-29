@@ -1,8 +1,17 @@
+const pkg = require("./package.json");
+
+// Single source of truth for app versioning lives in package.json:
+//   "version"     -> marketing version  (iOS CFBundleShortVersionString / Android versionName)
+//   "buildNumber" -> native build number (iOS CFBundleVersion / Android versionCode)
+// Bump these in package.json; they flow into both platforms from here.
+// Requires eas.json -> cli.appVersionSource = "local" for EAS to respect them.
+const buildNumber = pkg.buildNumber;
+
 module.exports = {
   expo: {
     name: "Wegood4u",
     slug: "wegood4u-mobile",
-    version: "1.1.4",
+    version: pkg.version,
     orientation: "portrait",
     icon: "./assets/images/icon.png",
     scheme: "wegood4u",
@@ -21,7 +30,7 @@ module.exports = {
     ios: {
       supportsTablet: true,
       bundleIdentifier: "com.saysheji.wegood4u",
-      buildNumber: "13",
+      buildNumber: String(buildNumber),
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -33,7 +42,7 @@ module.exports = {
       }
     },
     android: {
-      versionCode: 13,
+      versionCode: buildNumber,
       package: "com.saysheji.wegood4u",
       config: {
         googleMaps: {
