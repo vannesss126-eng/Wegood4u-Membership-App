@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -21,8 +24,11 @@ import {
   Clock3,
   CalendarDays,
   Wallet,
+  X,
 } from 'lucide-react-native';
 import type { PartnerStore } from '@/types';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type PartnerStoreDetailContentProps = {
   categoryLabel: string;
@@ -41,6 +47,8 @@ export default function PartnerStoreDetailContent({
   onBack,
   distanceLabel = 'Loading distance...',
 }: PartnerStoreDetailContentProps) {
+  const [activeMenuIndex, setActiveMenuIndex] = useState<number | null>(null);
+
   const formatRating = (value: number) => {
     if (!Number.isFinite(value) || value <= 0) {
       return '—';
@@ -69,6 +77,8 @@ export default function PartnerStoreDetailContent({
       </SafeAreaView>
     );
   }
+
+  const menuImages = store['menu-images'] ?? [];
 
   const handleShare = async () => {
     const locationLine = store.address?.trim() || store.city || '';
@@ -145,23 +155,87 @@ export default function PartnerStoreDetailContent({
             <InfoRow icon={<Wallet size={16} color="#64748b" />} text={store.priceRange || 'Price unavailable'} />
           </View>
 
-          {store['menu-images'] && store['menu-images'].length > 0 && (
+          {menuImages.length > 0 && (
             <View style={styles.menuSection}>
               <Text style={styles.menuTitle}>Menu</Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.menuScrollContent}
                 style={styles.menuScrollView}
               >
-                {store['menu-images'].map((imgUrl, index) => (
-                  <Image key={index} source={{ uri: imgUrl }} style={styles.menuImage} resizeMode="cover" />
+                {menuImages.map((imgUrl, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    activeOpacity={0.85}
+                    onPress={() => setActiveMenuIndex(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View menu image ${index + 1}`}
+                  >
+                    <Image source={{ uri: imgUrl }} style={styles.menuImage} resizeMode="cover" />
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
           )}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={activeMenuIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActiveMenuIndex(null)}
+      >
+        <View style={styles.menuViewerOverlay}>
+          {activeMenuIndex !== null && menuImages.length > 0 && (
+            <Text style={styles.menuViewerCounter}>
+              {activeMenuIndex + 1} / {menuImages.length}
+            </Text>
+          )}
+
+          <TouchableOpacity
+            style={styles.menuViewerClose}
+            onPress={() => setActiveMenuIndex(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Close menu image"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <X size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {activeMenuIndex !== null && (
+            <FlatList
+              data={menuImages}
+              keyExtractor={(item, index) => `${index}-${item}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={activeMenuIndex}
+              getItemLayout={(_, index) => ({
+                length: SCREEN_WIDTH,
+                offset: SCREEN_WIDTH * index,
+                index,
+              })}
+              onMomentumScrollEnd={(event) => {
+                const page = Math.round(
+                  event.nativeEvent.contentOffset.x / SCREEN_WIDTH
+                );
+                setActiveMenuIndex(page);
+              }}
+              renderItem={({ item }) => (
+                <View style={styles.menuViewerPage}>
+                  <Image
+                    source={{ uri: item }}
+                    style={styles.menuViewerImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -342,5 +416,41 @@ const styles = StyleSheet.create({
     height: 180,
     borderRadius: 8,
     backgroundColor: '#E2E8F0',
+  },
+  menuViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+  },
+  menuViewerPage: {
+    width: SCREEN_WIDTH,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuViewerImage: {
+    width: SCREEN_WIDTH,
+    height: '100%',
+  },
+  menuViewerCounter: {
+    position: 'absolute',
+    top: 54,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  menuViewerClose: {
+    position: 'absolute',
+    top: 48,
+    right: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

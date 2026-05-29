@@ -9,10 +9,8 @@ import {
   Image,
   Modal,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
 import {
   ArrowLeft,
   Search,
@@ -23,7 +21,6 @@ import {
   LayoutGrid,
 } from 'lucide-react-native';
 import { router } from 'expo-router';
-import { haversineDistanceM, formatDistanceM } from '@/lib/distance';
 import type { PartnerStore } from '@/types';
 
 type SortOption = 'rating' | 'alphabetical-az' | 'alphabetical-za';
@@ -60,29 +57,11 @@ export default function PartnerStoreCategoryScreen({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showSortModal, setShowSortModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     load();
-    loadUserLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const loadUserLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setUserLocation({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-    } catch (error) {
-      console.warn('Error getting location for category:', error);
-    }
-  };
 
   const load = async () => {
     try {
@@ -151,15 +130,6 @@ export default function PartnerStoreCategoryScreen({
     }
   };
 
-  const renderDistance = (store: PartnerStore) =>
-    userLocation ? (
-      <Text style={styles.metaText}>
-        {formatDistanceM(haversineDistanceM(userLocation, { latitude: store.latitude, longitude: store.longitude }))}
-      </Text>
-    ) : (
-      <ActivityIndicator size="small" color="#64748b" style={{ transform: [{ scale: 0.7 }] }} />
-    );
-
   const renderGridCard = (store: PartnerStore) => (
     <TouchableOpacity
       key={store.id}
@@ -172,7 +142,6 @@ export default function PartnerStoreCategoryScreen({
         <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
         <View style={styles.storeMeta}>
           <Text style={styles.metaText}>{store.type}</Text>
-          {renderDistance(store)}
         </View>
       </View>
     </TouchableOpacity>
@@ -194,7 +163,6 @@ export default function PartnerStoreCategoryScreen({
             <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
           </View>
           <Text style={styles.metaText}>{store.type}</Text>
-          {renderDistance(store)}
           {store.priceRange ? (
             <Text style={styles.priceRange}>{store.priceRange}</Text>
           ) : null}
