@@ -23,6 +23,7 @@ import banners, { Banner } from '@/data/banners';
 import { useUser } from '@/context/UserContext';
 import { useAuth } from '@/context/AuthContext';
 import { fetchPartnerStores } from '@/data/partnerStore';
+import { StoreCardSkeleton } from '@/components/Skeleton';
 import { router } from 'expo-router';
 import type { PartnerStore } from '@/types';
 
@@ -208,9 +209,11 @@ export default function HomeScreen() {
       </View>
       
       {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading recommendations...</Text>
-        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeList}>
+          {Array.from({ length: 4 }).map((_, index) => (
+            <StoreCardSkeleton key={index} />
+          ))}
+        </ScrollView>
       ) : stores.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.storeList}>
           {stores.map((store) => {
@@ -462,14 +465,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#475569',
     textAlign: 'center',
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#64748B',
   },
   emptyContainer: {
     paddingVertical: 40,

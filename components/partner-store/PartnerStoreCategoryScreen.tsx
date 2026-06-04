@@ -21,6 +21,7 @@ import {
   LayoutGrid,
 } from 'lucide-react-native';
 import { router } from 'expo-router';
+import { StoreGridCardSkeleton } from '@/components/Skeleton';
 import type { PartnerStore } from '@/types';
 
 type SortOption = 'rating' | 'alphabetical-az' | 'alphabetical-za';
@@ -31,7 +32,6 @@ interface PartnerStoreCategoryScreenProps {
   title: string;
   categoryRoute: string;
   searchPlaceholder?: string;
-  loadingText?: string;
   emptyText?: string;
   loadStores: () => Promise<PartnerStore[]>;
 }
@@ -40,13 +40,11 @@ export default function PartnerStoreCategoryScreen({
   title,
   categoryRoute,
   searchPlaceholder,
-  loadingText,
   emptyText,
   loadStores,
 }: PartnerStoreCategoryScreenProps) {
   const lowerTitle = title.toLowerCase();
   const placeholder = searchPlaceholder ?? `Search ${lowerTitle}...`;
-  const loadingLabel = loadingText ?? `Loading ${lowerTitle}...`;
   const emptyLabel = emptyText ?? `No ${lowerTitle} found`;
 
   const [stores, setStores] = useState<PartnerStore[]>([]);
@@ -174,9 +172,20 @@ export default function PartnerStoreCategoryScreen({
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>{loadingLabel}</Text>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <ArrowLeft size={24} color="#1e293b" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{title}</Text>
+          <View style={styles.headerSpacer} />
         </View>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.skeletonGrid}>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <StoreGridCardSkeleton key={index} />
+            ))}
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -405,14 +414,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#64748B',
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingTop: 16,
+    paddingBottom: 20,
   },
   header: {
     flexDirection: 'row',

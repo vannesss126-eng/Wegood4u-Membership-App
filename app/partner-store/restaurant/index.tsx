@@ -19,7 +19,6 @@ export default function RestaurantScreen() {
       title="Restaurant"
       categoryRoute="restaurant"
       searchPlaceholder="Search restaurants..."
-      loadingText="Loading restaurants..."
       emptyText="No restaurants found"
       loadStores={loadRestaurants}
     />

@@ -14,7 +14,6 @@ export default function ExperienceScreen() {
       title="Experience"
       categoryRoute="experience"
       searchPlaceholder="Search experiences..."
-      loadingText="Loading experiences..."
       emptyText="No experiences found"
       loadStores={loadExperiences}
     />

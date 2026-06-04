@@ -16,7 +16,6 @@ export default function BarScreen() {
       title="Bar & Beverages"
       categoryRoute="bar"
       searchPlaceholder="Search bars..."
-      loadingText="Loading bars..."
       emptyText="No bars found"
       loadStores={loadBars}
     />

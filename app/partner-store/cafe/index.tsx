@@ -17,7 +17,6 @@ export default function CafeScreen() {
       title="Cafe"
       categoryRoute="cafe"
       searchPlaceholder="Search cafes..."
-      loadingText="Loading cafes..."
       emptyText="No cafes found"
       loadStores={loadCafes}
     />
