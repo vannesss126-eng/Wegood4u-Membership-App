@@ -13,7 +13,7 @@ module.exports = {
     slug: "wegood4u-mobile",
     version: pkg.version,
     orientation: "portrait",
-    icon: "./assets/images/icon.jpeg",
+    icon: "./assets/images/icon.png",
     scheme: "wegood4u",
     userInterfaceStyle: "light",
     splash: {
