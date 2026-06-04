@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { Menu, Share2, Camera, SquareCheckBig, Trophy, SquareLibrary, Clock, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { Menu, Share2, Camera, SquareCheckBig, Trophy, Heart, Clock, ChevronRight, RefreshCw } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
 import { useUserSubmissions , usePendingSubmissionsCount } from '@/hooks/useSubmissions';
+import { useFavorites } from '@/hooks/useFavorite';
 import { supabase } from '@/lib/supabase';
 
 import { uploadProfileImage, updateUserAvatar } from '@/services/imageUpload'
@@ -46,6 +47,9 @@ export default function ProfileScreen() {
 
   // Visit Badge tier drives the avatar frame.
   const { tier: visitTier } = useVisitBadge(userData?.id);
+
+  // Favorited partner stores count (drives the Favorites stat card).
+  const { count: favoritesCount, isLoading: isLoadingFavorites } = useFavorites(userData?.id);
 
   // Fetch today's submission count for the user
   const fetchDailySubmissionCount = async () => {
@@ -278,11 +282,17 @@ export default function ProfileScreen() {
                 <Text style={styles.statLabel}>Badges</Text>
               </View>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
-                <SquareLibrary size={20} color="#64748B" />
-                <Text style={styles.statNumber}>0</Text>
-                <Text style={styles.statLabel}>Collection</Text>
-              </View>
+              <TouchableOpacity
+                style={styles.statItem}
+                activeOpacity={0.7}
+                onPress={() => router.push('/favorites')}
+              >
+                <Heart size={20} color="#F43F5E" />
+                <Text style={styles.statNumber}>
+                  {isLoadingFavorites ? '...' : favoritesCount}
+                </Text>
+                <Text style={styles.statLabel}>Favorites</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}

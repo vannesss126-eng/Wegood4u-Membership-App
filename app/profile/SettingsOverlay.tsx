@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus, Trash2 } from 'lucide-react-native';
+import { X, User, Settings, Bell, Lock, Info, MessageCircle, CircleHelp as HelpCircle, LogOut, ChevronRight, UserPlus, Heart, Trash2 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -136,6 +136,11 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
     router.push('/invite-friends');
   };
 
+  const handleFavorites = () => {
+    onClose();
+    router.push('/favorites');
+  };
+
   const renderMenuItem = (
     icon: React.ReactNode,
     title: string,
@@ -198,6 +203,12 @@ export default function SettingsOverlay({ visible, onClose, userData }: Settings
                   <UserPlus size={20} color="#64748B" />,
                   'Invite Friends',
                   handleInviteFriends
+                )}
+
+                {renderMenuItem(
+                  <Heart size={20} color="#64748B" />,
+                  'Favorites',
+                  handleFavorites
                 )}
               </View>
 

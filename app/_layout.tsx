@@ -151,8 +151,12 @@ export default function RootLayout() {
             name="(tabs)" 
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="invite-friends" 
+          <Stack.Screen
+            name="invite-friends"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="favorites"
             options={{ headerShown: false }}
           />
           <Stack.Screen 
