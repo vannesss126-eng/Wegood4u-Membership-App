@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Heart,
@@ -27,6 +28,8 @@ import {
   X,
 } from 'lucide-react-native';
 import type { PartnerStore } from '@/types';
+import { useAuth } from '@/context/AuthContext';
+import { useFavorite } from '@/hooks/useFavorite';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -48,6 +51,18 @@ export default function PartnerStoreDetailContent({
   distanceLabel = 'Loading distance...',
 }: PartnerStoreDetailContentProps) {
   const [activeMenuIndex, setActiveMenuIndex] = useState<number | null>(null);
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  const { isFavorited, isToggling, toggle } = useFavorite(store?.id, user?.id);
+
+  const handleFavoritePress = () => {
+    // Guests can't own favorites — send them to sign in first.
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    void toggle();
+  };
 
   const formatRating = (value: number) => {
     if (!Number.isFinite(value) || value <= 0) {
@@ -109,10 +124,13 @@ export default function PartnerStoreDetailContent({
               <TouchableOpacity
                 style={styles.actionPillButton}
                 accessibilityRole="button"
-                accessibilityLabel="Add to favorites"
+                accessibilityLabel={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                accessibilityState={{ selected: isFavorited }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                onPress={handleFavoritePress}
+                disabled={isToggling}
               >
-                <Heart size={18} color="#F43F5E" />
+                <Heart size={18} color="#F43F5E" fill={isFavorited ? '#F43F5E' : 'transparent'} />
               </TouchableOpacity>
               <View style={styles.actionPillDivider} />
               <TouchableOpacity
