@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { resolveStoreReferralCode } from '@/lib/referrals';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
 
@@ -86,7 +87,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     displayName: string,
     dateOfBirth?: string | null,
     gender?: string | null,
-    invitationCode?: string
+    invitationCode?: string,
+    outletRef?: string
   ) => {
     console.log('AuthContext: signUp called');
     setIsLoading(true);
@@ -116,6 +118,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         inviterId = inviteData.user_id;
+      }
+
+      // Resolve optional OUTLET referral code → partner_store_id (store attribution).
+      // Best-effort: an unknown code must NOT block signup (unlike the invitation code).
+      let referredByStoreId: string | null = null;
+      if (outletRef) {
+        referredByStoreId = await resolveStoreReferralCode(outletRef);
       }
 
       console.log('Creating user account...');
@@ -185,6 +194,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // throw new Error(`Failed to set inviter: ${updateError.message}`);
         } else {
           console.log('Inviter ID set successfully for user:', userId);
+        }
+      }
+
+      // 3) Attribute the signup to the outlet whose referral code/QR was used.
+      //    Independent of inviter_id — both can be set. Non-fatal on error.
+      if (referredByStoreId) {
+        const { error: storeAttrError } = await supabase
+          .from('profiles')
+          .update({ referred_by_store_id: referredByStoreId })
+          .eq('id', userId);
+
+        if (storeAttrError) {
+          console.error('Error setting referred_by_store_id:', storeAttrError);
+        } else {
+          console.log('referred_by_store_id set for user:', userId);
         }
       }
 
