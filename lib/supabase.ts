@@ -203,6 +203,7 @@ export type Database = {
           id: string;
           username: string | null;
           inviter_id: string | null;
+          referred_by_store_id: string | null;
           full_name: string | null;
           dob: string | null;
           country_of_residence: string | null;
@@ -225,6 +226,7 @@ export type Database = {
           id: string;
           username?: string | null;
           inviter_id?: string | null;
+          referred_by_store_id?: string | null;
           full_name?: string | null;
           dob?: string | null;
           country_of_residence?: string | null;
@@ -247,6 +249,7 @@ export type Database = {
           id?: string;
           username?: string | null;
           inviter_id?: string | null;
+          referred_by_store_id?: string | null;
           full_name?: string | null;
           dob?: string | null;
           country_of_residence?: string | null;
@@ -272,6 +275,7 @@ export type Database = {
           user_id: string;
           partner_store_name: string;
           partner_store_category: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
+          partner_store_id: string | null;
           status: 'pending' | 'approved' | 'rejected';
           selfie_url: string;
           receipt_url: string;
@@ -285,6 +289,7 @@ export type Database = {
           user_id: string;
           partner_store_name: string;
           partner_store_category: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
+          partner_store_id?: string | null;
           status?: 'pending' | 'approved' | 'rejected';
           selfie_url: string;
           receipt_url: string;
@@ -296,6 +301,7 @@ export type Database = {
           user_id?: string;
           partner_store_name?: string;
           partner_store_category?: 'cafe' | 'restaurant' | 'bar' | 'hotel' | 'others';
+          partner_store_id?: string | null;
           status?: 'pending' | 'approved' | 'rejected';
           selfie_url?: string;
           receipt_url?: string;
@@ -326,6 +332,23 @@ export type Database = {
           user_id: string;
           badge_id: number;
           earned_at?: string;
+        };
+      };
+      store_referral_codes: {
+        Row: {
+          partner_store_id: string;
+          code: string;
+          created_at: string;
+        };
+        Insert: {
+          partner_store_id: string;
+          code: string;
+          created_at?: string;
+        };
+        Update: {
+          partner_store_id?: string;
+          code?: string;
+          created_at?: string;
         };
       };
       invitation_codes: {
