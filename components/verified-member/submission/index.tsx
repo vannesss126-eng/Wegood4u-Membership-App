@@ -127,7 +127,9 @@ export default function SubmissionComponent({
 
   const mapStoreCategory = (storeType: string): string => {
     const normalizedType = storeType.toLowerCase();
-    if (normalizedType.includes('restaurant')) {
+    // Buffet partners (e.g. Thai Geng Mookata) live in the Restaurant category — the
+    // "buffet" behaviour (2 points, diner cap) is a per-store flag, not a category.
+    if (normalizedType.includes('restaurant') || normalizedType.includes('buffet')) {
       return 'restaurant';
     } else if (
       normalizedType.includes('coffee') ||
@@ -289,6 +291,7 @@ export default function SubmissionComponent({
 
       const submissionData = {
         user_id: userData.id,
+        partner_store_id: selectedStore.id,
         partner_store_name: selectedStore.name,
         partner_store_category: mappedCategory,
         status: 'pending' as const,
