@@ -5,6 +5,54 @@ type InvitationCode = Database['public']['Tables']['invitation_codes']['Row'];
 type InvitationCodeInsert = Database['public']['Tables']['invitation_codes']['Insert'];
 
 /**
+ * Resolves an OUTLET referral code (store_referral_codes.code) to its partner_store_id,
+ * or null if not found. Used at signup to attribute a download to the outlet whose QR
+ * was scanned. This is STORE ATTRIBUTION — distinct from the user invitation code /
+ * inviter_id chain. Best-effort and read-only: an unknown code must NOT block signup.
+ */
+export async function resolveStoreReferralCode(
+  code: string,
+  supabaseClient = supabase
+): Promise<string | null> {
+  const trimmed = code.trim();
+  if (!trimmed) return null;
+
+  const { data, error } = await supabaseClient
+    .from('store_referral_codes')
+    .select('partner_store_id')
+    .eq('code', trimmed)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('Failed to resolve store referral code:', error.message);
+    return null;
+  }
+  return data?.partner_store_id ?? null;
+}
+
+/**
+ * Fetches the referral code for an outlet (for display / QR generation), or null.
+ */
+export async function fetchStoreReferralCode(
+  partnerStoreId: string,
+  supabaseClient = supabase
+): Promise<string | null> {
+  if (!partnerStoreId) return null;
+
+  const { data, error } = await supabaseClient
+    .from('store_referral_codes')
+    .select('code')
+    .eq('partner_store_id', partnerStoreId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('Failed to fetch store referral code:', error.message);
+    return null;
+  }
+  return data?.code ?? null;
+}
+
+/**
  * Constants for invitation code generation
  * Format: WEGOOD + 6 random characters (a-z, A-Z, 0-9)
  * As per README.md requirements
