@@ -25,7 +25,8 @@ export interface AuthContextType {
     displayName: string,
     dateOfBirth?: string | null,
     gender?: string | null,
-    invitationCode?: string
+    invitationCode?: string,
+    outletRef?: string
   ) => Promise<void>;
   signOut: () => Promise<void>;
   forceClearAuth: () => Promise<void>;
