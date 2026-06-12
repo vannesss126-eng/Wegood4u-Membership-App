@@ -11,7 +11,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Eye, EyeOff, ChevronDown } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
@@ -44,6 +44,11 @@ export default function RegisterScreen() {
 
   const { signUp } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+
+  // Outlet referral code from the deep link (e.g. /register?ref=TG-BUKITJALIL).
+  // Attributes this signup to the outlet whose QR was scanned. Phase 6 wires the QR.
+  const { ref } = useLocalSearchParams<{ ref?: string }>();
+  const outletRef = Array.isArray(ref) ? ref[0] : ref;
 
   const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
@@ -120,12 +125,13 @@ export default function RegisterScreen() {
 
       const formattedDate = formData.dateOfBirth ? formatDateToYMD(formData.dateOfBirth) : null;
       await signUp(
-        formData.email, 
-        formData.password, 
-        formData.displayName, 
-        formattedDate, 
-        formData.gender || null, 
-        formData.invitationCode || undefined
+        formData.email,
+        formData.password,
+        formData.displayName,
+        formattedDate,
+        formData.gender || null,
+        formData.invitationCode || undefined,
+        outletRef || undefined
       );
       
       Alert.alert(
