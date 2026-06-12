@@ -50,6 +50,12 @@ interface ExtractedSubmission {
     total_amount: number | null;
     currency: string | null;
     merchant_name: string | null;
+    invoice_no: string | null;
+    diner_count: number | null;
+    adult_set_items: { name: string; qty: number }[];
+    address: string | null;
+    postal_code: string | null;
+    city: string | null;
   };
   selfie: {
     person_visible: boolean;
@@ -208,10 +214,29 @@ function normalizeDate(input: string): string | null {
 
 function merchantNameMatches(extractedName: string | null, partnerStoreName: string | null): boolean {
   if (!extractedName || !partnerStoreName) return false;
+
+  // Fast path: punctuation-insensitive substring (handles "(Bukit Jalil)" vs "• Bukit Jalil").
   const a = extractedName.toLowerCase().replace(/[^a-z0-9]/g, "");
   const b = partnerStoreName.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!a || !b) return false;
-  return a.includes(b) || b.includes(a);
+  if (a.includes(b) || b.includes(a)) return true;
+
+  // Token-subset path: all of the shorter name's significant words appear in the longer.
+  // Handles extra words on ONE side only — e.g. store "… Bandar Bukit Raja" vs receipt
+  // "… Bukit Raja", or store "… Signature … Buffet SS2" vs receipt "… Mookata SS2".
+  // The branch token (bukit/raja/ss2/kepong …) still discriminates wrong-branch receipts,
+  // and the address check (Phase 4f) is the second branch guard.
+  const STOP = new Set(["sdn", "bhd", "mookata", "buffet", "signature", "restaurant", "the"]);
+  const tokens = (s: string) =>
+    new Set(s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 1 && !STOP.has(t)));
+  const ta = tokens(extractedName);
+  const tb = tokens(partnerStoreName);
+  if (ta.size === 0 || tb.size === 0) return false;
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  for (const t of small) {
+    if (!big.has(t)) return false;
+  }
+  return true;
 }
 
 function isReceiptTooOld(receiptDate: string, submissionCreatedAt: string): boolean {
@@ -241,7 +266,13 @@ Return EXACTLY valid JSON matching this schema, with no surrounding text, no mar
     "date": "YYYY-MM-DD" | null,
     "total_amount": number | null,
     "currency": string | null,
-    "merchant_name": string | null
+    "merchant_name": string | null,
+    "invoice_no": string | null,
+    "adult_set_items": [{ "name": string, "qty": number }],
+    "diner_count": number | null,
+    "address": string | null,
+    "postal_code": string | null,
+    "city": string | null
   },
   "selfie": {
     "person_visible": boolean,
@@ -253,7 +284,13 @@ Field rules:
 - receipt.date: transaction date printed on the receipt, normalized to ISO YYYY-MM-DD. null if unreadable.
 - receipt.total_amount: numeric grand total paid (just the number, e.g. 42.5). null if unreadable.
 - receipt.currency: currency code as printed (e.g. "MYR", "USD", "RM"). null if not clearly indicated.
-- receipt.merchant_name: merchant or store name as printed at the top of the receipt. null if unreadable.
+- receipt.merchant_name: the merchant's PRIMARY TRADING NAME as printed at the top, INCLUDING any branch shown in brackets or after a slash (e.g. "THAI GENG MOOKATA (BUKIT JALIL)"). Prefer this brand line over a legal-entity line like "... SDN. BHD.". null if unreadable.
+- receipt.invoice_no: the invoice / bill / receipt number printed on the receipt (e.g. "8483"). null if none is printed.
+- receipt.adult_set_items: per-person buffet SET/PACKAGE line items that count as a diner — e.g. "Basic Set (Adult)", "Premium Set (Adult)", "Deluxe Buffet (Adult)", "Basic Set (Senior Citizen)", "Basic Set (Half Price)". EXCLUDE any set whose name contains Kid/Kids/Child/Children (e.g. "Basic Set (Free Kid)", "Basic Set (Kids)", "Basic Set (Birthday - Kid)"). Each as { name, qty } using the printed Qty. Empty array if none.
+- receipt.diner_count: number of diners = the SUM of receipt.adult_set_items quantities (all per-person sets EXCEPT children's sets). Do NOT use any printed "Table pax"/"pax" field (it is unreliable — a real receipt printed pax=1 while 2 adults ate). Do NOT use the subtotal total-quantity. Ignore drinks, sides, soups and add-on upgrades. null if no qualifying set line is found.
+- receipt.address: the merchant's full printed address block near the top of the receipt. null if not printed.
+- receipt.postal_code: the postal code from that address (e.g. "57000"). null if not printed.
+- receipt.city: the city / locality from that address (e.g. "Kuala Lumpur"). null if not printed.
 - selfie.person_visible: true ONLY if a clearly recognizable human face is visible in the selfie image.
 - selfie.receipt_visible: true ONLY if a physical paper receipt is also visible in the selfie image (typically held in frame by the person).
 
@@ -312,12 +349,31 @@ Return the JSON object only.`;
     ? Number(totalAmountRaw)
     : NaN;
 
+  // Per-person buffet set lines (adult/senior/half-price etc., EXCLUDING kids) → diner
+  // count. Recompute the sum from the listed items (more robust than the model's own
+  // arithmetic); fall back to the model's diner_count only when it listed no items.
+  const adultSetItems = (Array.isArray(receiptData.adult_set_items) ? receiptData.adult_set_items : [])
+    .map((it: any) => ({ name: String(it?.name ?? "").trim(), qty: Math.trunc(Number(it?.qty)) }))
+    .filter((it: any) => it.name && Number.isFinite(it.qty) && it.qty > 0);
+  const setsSum = adultSetItems.reduce((acc: number, it: any) => acc + it.qty, 0);
+  const modelDinerCount =
+    receiptData.diner_count !== undefined && receiptData.diner_count !== null && Number.isFinite(Number(receiptData.diner_count))
+      ? Math.trunc(Number(receiptData.diner_count))
+      : null;
+  const dinerCount = adultSetItems.length > 0 ? setsSum : modelDinerCount;
+
   return {
     receipt: {
       date: receiptData.date ? normalizeDate(receiptData.date) : null,
       total_amount: Number.isFinite(totalAmount) ? totalAmount : null,
       currency: receiptData.currency ? String(receiptData.currency).trim() : null,
       merchant_name: receiptData.merchant_name ? String(receiptData.merchant_name).trim() : null,
+      invoice_no: receiptData.invoice_no ? String(receiptData.invoice_no).trim() : null,
+      diner_count: dinerCount !== null && dinerCount > 0 ? dinerCount : null,
+      adult_set_items: adultSetItems,
+      address: receiptData.address ? String(receiptData.address).trim() : null,
+      postal_code: receiptData.postal_code ? String(receiptData.postal_code).trim() : null,
+      city: receiptData.city ? String(receiptData.city).trim() : null,
     },
     selfie: {
       person_visible: selfieData.person_visible === true,
@@ -395,6 +451,86 @@ async function checkFuzzyDuplicate(
   return { found: false as const, reason: null };
 }
 
+function extractPostalCode(text: string | null): string | null {
+  if (!text) return null;
+  const match = String(text).match(/\b\d{5}\b/);
+  return match ? match[0] : null;
+}
+
+function normalizeForMatch(value: string | null): string {
+  if (!value) return "";
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+// Address corroboration (Phase 4f). Returns a conflict reason, or null when the
+// address is consistent OR there isn't enough signal to judge (missing ≠ fail).
+function addressConflictReason(
+  receiptPostal: string | null,
+  receiptAddress: string | null,
+  receiptCity: string | null,
+  dbAddress: string | null,
+  dbCity: string | null,
+): string | null {
+  const rPC = receiptPostal ?? extractPostalCode(receiptAddress);
+  const dbPC = extractPostalCode(dbAddress);
+
+  // Strongest signal: both postal codes present. Equal → consistent; differ → conflict.
+  if (rPC && dbPC) {
+    return rPC === dbPC ? null : `Receipt postal code ${rPC} does not match store postal code ${dbPC}`;
+  }
+
+  // No postal pair — fall back to city. Flag only if both present and neither contains the other.
+  const rCity = normalizeForMatch(receiptCity);
+  const dCity = normalizeForMatch(dbCity);
+  if (rCity && dCity && !rCity.includes(dCity) && !dCity.includes(rCity)) {
+    return `Receipt city "${receiptCity}" does not match store city "${dbCity}"`;
+  }
+
+  return null;
+}
+
+// Per-receipt diner cap (Phase 4c). Counts DISTINCT OTHER users who already claimed
+// the same physical receipt (grouped by invoice no, else date + total) and flags when
+// that count has already reached the receipt's diner_count.
+async function checkDinerLimit(
+  submission: any,
+  invoiceNo: string | null,
+  receiptDate: string | null,
+  totalAmount: number | null,
+  dinerCount: number,
+) {
+  let query = supabaseAdmin
+    .from("submissions")
+    .select("user_id")
+    .eq("partner_store_id", submission.partner_store_id)
+    .in("status", ["approved", "pending"])
+    .neq("id", submission.id)
+    .neq("user_id", submission.user_id);
+
+  if (invoiceNo) {
+    query = query.eq("receipt_reference", invoiceNo);
+  } else {
+    query = query.eq("receipt_date", receiptDate).eq("total_amount", totalAmount);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    throw new Error(`Failed to query diner-limit claimants: ${error.message}`);
+  }
+
+  // NOTE: soft cap. Two users submitting the same receipt within the same review
+  // window may not see each other's receipt_reference yet (race at the exact boundary).
+  // Acceptable because this only flags for human review, never auto-rejects.
+  const distinctOthers = new Set((data ?? []).map((row: any) => row.user_id)).size;
+  if (distinctOthers >= dinerCount) {
+    return {
+      found: true as const,
+      reason: `Buffet receipt${invoiceNo ? ` #${invoiceNo}` : ""} already claimed by ${distinctOthers} other diner(s); limit is ${dinerCount}.`,
+    };
+  }
+  return { found: false as const, reason: null };
+}
+
 Deno.serve(async (req: Request) => {
   try {
     if (req.method === "OPTIONS") {
@@ -453,6 +589,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Matched partner store — needed for the diner cap (is_buffet) and address
+    // corroboration. NULL on legacy submissions without a partner_store_id.
+    let store: { address: string | null; city: string | null; is_buffet: boolean } | null = null;
+    if (submission.partner_store_id) {
+      const { data: storeRow, error: storeError } = await supabaseAdmin
+        .from("partner_stores")
+        .select("address, city, is_buffet")
+        .eq("id", submission.partner_store_id)
+        .maybeSingle();
+      if (storeError) {
+        console.warn("Failed to fetch partner store for review", storeError);
+      }
+      store = storeRow ?? null;
+    }
+
     let receiptImg: FetchedImage;
     let selfieImg: FetchedImage;
     try {
@@ -481,7 +632,11 @@ Deno.serve(async (req: Request) => {
     const oversizeSelfie = selfieImg.bytes.byteLength > MAX_IMAGE_RAW_BYTES;
 
     let extracted: ExtractedSubmission = {
-      receipt: { date: null, total_amount: null, currency: null, merchant_name: null },
+      receipt: {
+        date: null, total_amount: null, currency: null, merchant_name: null,
+        invoice_no: null, diner_count: null, adult_set_items: [],
+        address: null, postal_code: null, city: null,
+      },
       selfie: { person_visible: false, receipt_visible: false },
     };
     let aiError: string | null = null;
@@ -498,6 +653,16 @@ Deno.serve(async (req: Request) => {
     const receiptDate = extracted.receipt.date;
     const totalAmount = extracted.receipt.total_amount;
     const selfie = extracted.selfie;
+    const invoiceNo = extracted.receipt.invoice_no;
+    const dinerCount = extracted.receipt.diner_count;
+    const adultSetItems = extracted.receipt.adult_set_items;
+    const receiptAddress = extracted.receipt.address;
+    const receiptPostal = extracted.receipt.postal_code;
+    const receiptCity = extracted.receipt.city;
+
+    // True only when the AI actually parsed the images (not skipped for hash-dup /
+    // oversize / API error). The buffet + address checks below need real extracted data.
+    const extractionRan = !hashDup.found && !oversizeReceipt && !oversizeSelfie && !aiError;
 
     // Phase 1: AI only approves or leaves pending — never rejects.
     // Collect ALL issues so admin sees the full picture in one glance.
@@ -537,6 +702,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Per-receipt diner cap — buffet outlets only (store.is_buffet).
+    if (extractionRan && store?.is_buffet) {
+      if (dinerCount === null) {
+        issues.push("Buffet receipt: number of adult sets (diner count) not detected — manual check needed.");
+      } else if (!invoiceNo && (!receiptDate || totalAmount === null)) {
+        issues.push("Buffet receipt: no invoice number (or date + total) to group claims — manual check needed.");
+      } else {
+        const dinerCheck = await checkDinerLimit(submission, invoiceNo, receiptDate, totalAmount, dinerCount);
+        if (dinerCheck.found) issues.push(dinerCheck.reason);
+      }
+    }
+
+    // Address corroboration vs the store's DB address — flag only on a clear conflict.
+    if (extractionRan && store) {
+      const addrConflict = addressConflictReason(receiptPostal, receiptAddress, receiptCity, store.address, store.city);
+      if (addrConflict) issues.push(addrConflict);
+    }
+
     let decision: "approved" | "pending" = "pending";
     let adminNotes: string;
 
@@ -547,12 +730,21 @@ Deno.serve(async (req: Request) => {
       adminNotes = `AI review flagged ${issues.length} issue(s): ${issues.join("; ")}.`;
     }
 
+    // Buffet audit trail: record how pax was derived so an admin can verify a flag.
+    if (extractionRan && store?.is_buffet && dinerCount !== null) {
+      const setsDesc = adultSetItems.map((it) => `${it.name}×${it.qty}`).join(", ");
+      adminNotes += ` [Buffet pax=${dinerCount}${setsDesc ? ` from ${setsDesc}` : ""}; invoice ${invoiceNo ?? "n/a"}]`;
+    }
+
     const updatePayload: Record<string, unknown> = {
       receipt_hash: receiptHash,
       receipt_date: receiptDate,
       total_amount: totalAmount,
       currency: extracted.receipt.currency,
       merchant_name: extracted.receipt.merchant_name,
+      receipt_reference: invoiceNo,
+      diner_count: dinerCount,
+      receipt_address: receiptAddress,
       admin_notes: adminNotes,
       reviewed_by: AI_REVIEWER_ID,
     };
