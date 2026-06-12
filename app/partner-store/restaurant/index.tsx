@@ -6,6 +6,7 @@ const loadRestaurants = async () => {
   const stores = await fetchPartnerStores();
   return stores.filter(store =>
     store.type.toLowerCase().includes('restaurant') ||
+    store.type.toLowerCase().includes('buffet') ||
     store.type.toLowerCase().includes('italian') ||
     store.type.toLowerCase().includes('japanese') ||
     store.type.toLowerCase().includes('fast food') ||
