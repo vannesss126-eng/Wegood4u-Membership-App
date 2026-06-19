@@ -94,37 +94,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     
     try {
-      // First, check if invitation code exists (if provided)
+      // The "Invitation Code" field accepts BOTH a user-to-user invitation code AND store referral code
       let inviterId: string | undefined;
+      let referredByStoreId: string | null = null;
+
       if (invitationCode) {
         // Trim whitespace from the invitation code
         const trimmedCode = invitationCode.trim();
-        
-        // Direct database query using index for fast, case-sensitive lookup
-        const { data: inviteData, error: inviteError } = await supabase
-          .from('invitation_codes')
-          .select('user_id')
-          .eq('code', trimmedCode)  // Exact case-sensitive match, uses index
-          .eq('is_active', true)
+
+        const { data, error: resolveError } = await supabase
+          .rpc('resolve_referral_code', { p_code: trimmedCode })
           .maybeSingle();
+        const resolved = data as {
+          kind: 'user' | 'store';
+          user_id: string | null;
+          partner_store_id: string | null;
+        } | null;
 
-        if (inviteError) {
-          console.error('Error validating invitation code:', inviteError);
+        if (resolveError) {
+          console.error('Error validating invitation code:', resolveError);
           throw new Error('Invalid invitation code');
         }
 
-        if (!inviteData) {
+        if (!resolved) {
+          // Matched neither invitation_codes nor store_referral_codes.
           throw new Error('Invalid invitation code');
         }
 
-        inviterId = inviteData.user_id;
+        if (resolved.kind === 'user') {
+          inviterId = resolved.user_id ?? undefined;
+        } else if (resolved.kind === 'store') {
+          referredByStoreId = resolved.partner_store_id ?? null;
+        }
       }
 
-      // Resolve optional OUTLET referral code → partner_store_id (store attribution).
-      // Best-effort: an unknown code must NOT block signup (unlike the invitation code).
-      let referredByStoreId: string | null = null;
+      // A deep-link `ref=` parameter (QR scan) also attributes the signup to an outlet.
+      // Best-effort: it takes precedence over a manually typed store code, but an unknown
+      // code here must NOT block signup (unlike the invitation code field above).
       if (outletRef) {
-        referredByStoreId = await resolveStoreReferralCode(outletRef);
+        const deepLinkStoreId = await resolveStoreReferralCode(outletRef);
+        if (deepLinkStoreId) referredByStoreId = deepLinkStoreId;
       }
 
       console.log('Creating user account...');

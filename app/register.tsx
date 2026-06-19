@@ -293,8 +293,13 @@ export default function RegisterScreen() {
               placeholderTextColor="#999"
               value={formData.invitationCode}
               onChangeText={(text) => updateFormData('invitationCode', text)}
-              autoCapitalize="characters"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="off"
             />
+            <Text style={styles.inputHint}>
+              Codes are case-sensitive — enter it exactly as shown.
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -422,6 +427,11 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 8,
     fontWeight: '500',
+  },
+  inputHint: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 6,
   },
   input: {
     backgroundColor: '#F5F5F5',
