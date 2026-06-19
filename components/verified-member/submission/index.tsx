@@ -71,30 +71,6 @@ export default function SubmissionComponent({
   const [selfiePhoto, setSelfiePhoto] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [dailySubmissionCount, setDailySubmissionCount] = useState(0);
-
-  const fetchDailySubmissionCount = async () => {
-    if (!userData?.id) return;
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString();
-
-    const { count, error } = await supabase
-      .from('submissions')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userData.id)
-      .gte('created_at', startOfDay)
-      .lt('created_at', endOfDay);
-
-    if (error) {
-      console.error('Error fetching daily count:', error);
-    } else {
-      setDailySubmissionCount(count || 0);
-    }
-  };
-
-  useEffect(() => {
-    fetchDailySubmissionCount();
-  }, [userData?.id]);
 
   const dayOptions = useMemo(() => {
     const m = month ?? today.getMonth();
@@ -263,11 +239,6 @@ export default function SubmissionComponent({
       Alert.alert('Error', 'User not found. Please try again.');
       return;
     }
-    if (dailySubmissionCount >= 20) {
-      Alert.alert('Daily Limit Reached', 'You have already submitted 20 proof-of-travel today. Please try again tomorrow.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -312,17 +283,11 @@ export default function SubmissionComponent({
       }
 
       await fetchSubmissions();
-      await fetchDailySubmissionCount();
       setShowSuccess(true);
     } catch (error: any) {
       console.error('Submission error:', error);
-      if (error.message && (error.message.includes('violates row-level security policy') || error.message.includes('submissions'))) {
-        Alert.alert('Daily Limit Reached', 'You have already submitted 20 proof-of-travel today. Please try again tomorrow.');
-        fetchDailySubmissionCount();
-      } else {
-        const errorMessage = error.message || 'Failed to submit proof of travel. Please try again.';
-        Alert.alert('Error', errorMessage);
-      }
+      const errorMessage = error.message || 'Failed to submit proof of travel. Please try again.';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -554,14 +519,6 @@ export default function SubmissionComponent({
           {isSubmitting ? 'Submitting…' : 'Submit'}
         </Text>
       </TouchableOpacity>
-
-      {dailySubmissionCount >= 19 && (
-        <Text style={[styles.warningText, dailySubmissionCount >= 20 && styles.errorText]}>
-          {dailySubmissionCount >= 20
-            ? 'Daily limit reached. You cannot submit more today.'
-            : `Warning: You have submitted ${dailySubmissionCount}/20 today.`}
-        </Text>
-      )}
 
       {renderPickerModal()}
     </View>
