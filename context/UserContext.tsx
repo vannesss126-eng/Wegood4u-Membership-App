@@ -100,7 +100,7 @@ export function UserProvider({ children }: UserProviderProps) {
         updatedAt: profile?.updated_at || null,
       };
 
-      console.log('User Context: Combined user data:', combinedUserData);
+      console.log('User Context: Combined user data loaded for:', combinedUserData?.id ?? 'unknown');
       setUserData(combinedUserData);
 
       // Fetch preferences separately

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
-import { resolveStoreReferralCode } from '@/lib/referrals';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
 
@@ -59,7 +58,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         password,
       });
-      console.log('Supabase data response received: ', data);
+      console.log('Supabase sign-in response received:', data.session ? 'session present' : 'no session');
       if (error) {
         console.log('Supabase error response received: ', error);
         throw error;
@@ -71,8 +70,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(false);
       
       console.log('Login successful');
-      console.log('Session:', data.session ? data.session : 'missing');
-      console.log('User :', data.user ? data.user : 'missing');
+      console.log('Session:', data.session ? 'present' : 'missing');
+      console.log('User:', data.user ? 'present' : 'missing');
     } catch (error: any) {
       console.error('Error type:', typeof error);
       console.error('Error message:', error.message);
@@ -94,46 +93,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(true);
     
     try {
-      // The "Invitation Code" field accepts BOTH a user-to-user invitation code AND store referral code
-      let inviterId: string | undefined;
-      let referredByStoreId: string | null = null;
-
-      if (invitationCode) {
-        // Trim whitespace from the invitation code
-        const trimmedCode = invitationCode.trim();
-
-        const { data, error: resolveError } = await supabase
-          .rpc('resolve_referral_code', { p_code: trimmedCode })
+      // The "Invitation Code" field accepts BOTH a user-to-user invitation code
+      // and a store referral code. We validate it here so an invalid code blocks
+      // signup with a clear message, but no longer resolve/persist it on the
+      // client — the handle_new_user trigger resolves referral_code + outlet_ref
+      // (passed via signUp metadata below) and writes the profile server-side.
+      if (invitationCode?.trim()) {
+        const { data: resolved, error: resolveError } = await supabase
+          .rpc('resolve_referral_code', { p_code: invitationCode.trim() })
           .maybeSingle();
-        const resolved = data as {
-          kind: 'user' | 'store';
-          user_id: string | null;
-          partner_store_id: string | null;
-        } | null;
 
-        if (resolveError) {
-          console.error('Error validating invitation code:', resolveError);
+        if (resolveError || !resolved) {
+          if (resolveError) console.error('Error validating invitation code:', resolveError);
           throw new Error('Invalid invitation code');
         }
-
-        if (!resolved) {
-          // Matched neither invitation_codes nor store_referral_codes.
-          throw new Error('Invalid invitation code');
-        }
-
-        if (resolved.kind === 'user') {
-          inviterId = resolved.user_id ?? undefined;
-        } else if (resolved.kind === 'store') {
-          referredByStoreId = resolved.partner_store_id ?? null;
-        }
-      }
-
-      // A deep-link `ref=` parameter (QR scan) also attributes the signup to an outlet.
-      // Best-effort: it takes precedence over a manually typed store code, but an unknown
-      // code here must NOT block signup (unlike the invitation code field above).
-      if (outletRef) {
-        const deepLinkStoreId = await resolveStoreReferralCode(outletRef);
-        if (deepLinkStoreId) referredByStoreId = deepLinkStoreId;
       }
 
       console.log('Creating user account...');
@@ -147,6 +120,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
             full_name: displayName,
             dob: dateOfBirth ?? null,
             gender: gender ?? null,
+            // Resolved + persisted server-side by the handle_new_user trigger.
+            referral_code: invitationCode?.trim() || null,
+            outlet_ref: outletRef ?? null,
           },
           emailRedirectTo: 'https://wegood4u.com/email-confirmed',
         },
@@ -162,64 +138,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error('Failed to create user account');
       }
 
-      // Manual state update for immediate sync (session may be null for email confirm flow)
+      // The profile row — including inviter_id / referred_by_store_id resolved
+      // from the referral_code + outlet_ref metadata above — is created
+      // server-side by the handle_new_user trigger. The client no longer writes
+      // to `profiles`, which lets the anon "manage profiles" RLS policy be dropped.
       setSession(data.session);
-      setUser (data.user ?? null);
-      console.log('User  created successfully:', data.user.id);
-
-      const userId = data.user.id;
-
-      // 1) Manually create or ensure the profile exists (instead of relying on trigger timing)
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert(
-          {
-            id: userId,
-            username: displayName,
-            full_name: displayName,
-            role: 'subscriber',
-            dob: dateOfBirth ?? null, // assuming profiles.dob exists as date
-          },
-          { onConflict: 'id' }
-        );
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-        throw new Error(`Failed to create profile: ${profileError.message}`);
-      }
-
-      // 2) If invitation code was provided, set inviter_id on the profile
-      if (inviterId) {
-        console.log('Setting inviter_id on profile:', inviterId, 'for user:', userId);
-
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({ inviter_id: inviterId })
-          .eq('id', userId);
-
-        if (updateError) {
-          console.error('Error setting inviter:', updateError);
-          // Decide whether to fail signup or just log. For now, log and continue.
-          // throw new Error(`Failed to set inviter: ${updateError.message}`);
-        } else {
-          console.log('Inviter ID set successfully for user:', userId);
-        }
-      }
-
-      // 3) Attribute the signup to the outlet whose referral code/QR was used.
-      //    Independent of inviter_id — both can be set. Non-fatal on error.
-      if (referredByStoreId) {
-        const { error: storeAttrError } = await supabase
-          .from('profiles')
-          .update({ referred_by_store_id: referredByStoreId })
-          .eq('id', userId);
-
-        if (storeAttrError) {
-          console.error('Error setting referred_by_store_id:', storeAttrError);
-        } else {
-          console.log('referred_by_store_id set for user:', userId);
-        }
-      }
+      setUser(data.user ?? null);
+      console.log('User created successfully:', data.user.id);
 
     } catch (error: any) {
       console.error('SignUp error caught:', error);

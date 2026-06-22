@@ -9,12 +9,59 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, User, Mail, Calendar, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, User, Mail, Calendar, RefreshCw, Trash2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function AccountProfileScreen() {
   const { userData, isLoading, error, refreshUserData } = useUser();
+  const { signOut } = useAuth();
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you absolutely sure? This action cannot be undone and all your travel proofs, badges, and rewards will be permanently lost.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data, error } = await supabase.functions.invoke('delete-account', {
+                method: 'POST',
+              });
+
+              if (error || (data as any)?.error) {
+                throw error || new Error((data as any)?.error);
+              }
+
+              try {
+                await signOut();
+              } catch {
+                await supabase.auth.signOut();
+              }
+
+              router.replace('/(tabs)');
+
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been permanently removed.'
+              );
+            } catch (err: any) {
+              console.error('Failed to delete account:', err);
+              Alert.alert(
+                'Error',
+                'We encountered an issue deleting your account. Please try again or contact support.'
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'Not set';
@@ -167,6 +214,16 @@ export default function AccountProfileScreen() {
           </View>
         </View>
 
+        {/* Delete Account Section */}
+        <View style={styles.deleteSection}>
+          <TouchableOpacity style={styles.deleteItem} onPress={handleDeleteAccount}>
+            <View style={styles.deleteIcon}>
+              <Trash2 size={20} color="#EF4444" />
+            </View>
+            <Text style={styles.deleteText}>Delete Account</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Debug Information (remove in production)
         {__DEV__ && (
           <View style={styles.debugSection}>
@@ -277,6 +334,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  deleteSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  deleteItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 16,
+  },
+  deleteIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fef2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  deleteText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
   },
   debugSection: {
     backgroundColor: 'white',
