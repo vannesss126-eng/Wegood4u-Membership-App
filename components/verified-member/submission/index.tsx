@@ -197,11 +197,9 @@ export default function SubmissionComponent({
       throw new Error(`Failed to upload image: ${error?.message ?? 'unknown'}`);
     }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(data.path);
-
-    return publicUrl;
+    // Buckets are private — store the object PATH. Display (admin review) resolves
+    // short-lived signed URLs; the AI review edge fn downloads via the service role.
+    return data.path;
   };
 
   const resetForm = () => {
@@ -243,8 +241,10 @@ export default function SubmissionComponent({
 
     try {
       const timestamp = Date.now();
-      const receiptFileName = `receipt_${userData.id}_${timestamp}.webp`;
-      const selfieFileName = `selfie_${userData.id}_${timestamp}.webp`;
+      // Folder-prefixed by user id so the storage ownership RLS policy
+      // ((storage.foldername(name))[1] = auth.uid()) applies on these private buckets.
+      const receiptFileName = `${userData.id}/receipt_${timestamp}.webp`;
+      const selfieFileName = `${userData.id}/selfie_${timestamp}.webp`;
       const webpType = 'image/webp';
 
       const [receiptOptimizedUri, selfieOptimizedUri] = await Promise.all([

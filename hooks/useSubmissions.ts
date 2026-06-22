@@ -9,6 +9,38 @@ import type {
   UseSubmissionsOptions 
 } from '@/types';
 
+const RECEIPT_BUCKET = 'submitted-receipt';
+const SELFIE_BUCKET = 'submitted-selfie';
+const SIGNED_MEDIA_TTL_SECONDS = 3600;
+
+// Receipts/selfies live in PRIVATE storage buckets; submissions.*_url columns now
+// hold the object path. Resolve short-lived signed URLs for display. Legacy rows
+// that still hold a full public URL (http...) are passed through unchanged.
+async function signOne(bucket: string, value: string | null | undefined): Promise<string> {
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(value, SIGNED_MEDIA_TTL_SECONDS);
+  if (error || !data?.signedUrl) {
+    console.warn(`Failed to sign ${bucket} URL:`, error?.message);
+    return '';
+  }
+  return data.signedUrl;
+}
+
+export async function signSubmissionMedia<
+  T extends { receipt_url?: string | null; selfie_url?: string | null }
+>(rows: T[]): Promise<T[]> {
+  return Promise.all(
+    rows.map(async (row) => ({
+      ...row,
+      receipt_url: await signOne(RECEIPT_BUCKET, row.receipt_url),
+      selfie_url: await signOne(SELFIE_BUCKET, row.selfie_url),
+    }))
+  );
+}
+
 // Base hook for fetching submissions with flexible filtering
 export function useSubmissions(options: UseSubmissionsOptions = {}) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -229,7 +261,7 @@ export function usePendingSubmissionsPaginated(pageSize: number = 3) {
           throw new Error(fetchError.message || 'Failed to fetch pending submissions');
         }
 
-        setPendingSubmissions(data || []);
+        setPendingSubmissions(await signSubmissionMedia(data || []));
         setCurrentPage(pageIndex);
         currentPageRef.current = pageIndex;
         setError(null);

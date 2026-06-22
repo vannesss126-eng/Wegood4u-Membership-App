@@ -55,11 +55,10 @@ export default function UnverifiedMember({
     }
 
     try {
-      // Update user role to 'member' in the database
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: 'member' })
-        .eq('id', userData.id);
+      // Promote subscriber -> member via the server-side RPC, which re-checks the
+      // email-confirmed + questionnaire gate. Direct role writes are now blocked
+      // by the prevent_role_escalation trigger (security_hardening_phase1 migration).
+      const { error } = await supabase.rpc('request_member_upgrade');
 
       if (error) {
         throw error;

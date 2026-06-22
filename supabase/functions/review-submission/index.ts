@@ -10,6 +10,9 @@ declare const Deno: {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
+// Optional shared secret. When set, review-submission requires a matching
+// x-webhook-secret header (sent by the trigger_ai_review_submission DB trigger).
+const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET");
 
 if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !ANTHROPIC_API_KEY) {
   console.error("Missing SUPABASE_URL or SERVICE_ROLE_KEY or ANTHROPIC_API_KEY");
@@ -148,27 +151,8 @@ function detectMediaType(bytes: Uint8Array, contentType: string | null, url: str
   return "image/jpeg";
 }
 
-async function fetchImageBytes(url: string): Promise<FetchedImage> {
-  try {
-    const response = await fetch(url);
-    if (response.ok) {
-      const contentType = response.headers.get("content-type");
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      return { bytes, mediaType: detectMediaType(bytes, contentType, url) };
-    }
-  } catch (error) {
-    console.warn("Image fetch failed via URL, falling back to storage path", error);
-  }
-
-  const parsed = parseSupabaseStoragePath(url);
-  if (!parsed) {
-    throw new Error("Unable to resolve image URL to Supabase storage path");
-  }
-
-  const { data, error } = await supabaseAdmin.storage
-    .from(parsed.bucket)
-    .download(parsed.path);
+async function downloadFromStorage(bucket: string, path: string, mediaHint: string): Promise<FetchedImage> {
+  const { data, error } = await supabaseAdmin.storage.from(bucket).download(path);
 
   if (error || !data) {
     throw new Error(`Failed to download image from storage: ${error?.message ?? "unknown"}`);
@@ -187,7 +171,33 @@ async function fetchImageBytes(url: string): Promise<FetchedImage> {
     throw new Error("Unsupported storage response type when downloading image");
   }
 
-  return { bytes, mediaType: detectMediaType(bytes, contentType, url) };
+  return { bytes, mediaType: detectMediaType(bytes, contentType, mediaHint) };
+}
+
+// `value` is either a bare object path (new private-bucket submissions) or, for
+// legacy rows, a full public URL. `bucket` is the bucket the column belongs to.
+async function fetchImageBytes(bucket: string, value: string): Promise<FetchedImage> {
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const response = await fetch(value);
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        return { bytes, mediaType: detectMediaType(bytes, contentType, value) };
+      }
+    } catch (error) {
+      console.warn("Image fetch failed via URL, falling back to storage path", error);
+    }
+    const parsed = parseSupabaseStoragePath(value);
+    if (!parsed) {
+      throw new Error("Unable to resolve image URL to Supabase storage path");
+    }
+    return downloadFromStorage(parsed.bucket, parsed.path, value);
+  }
+
+  // Private bucket: download directly by path with the service role.
+  return downloadFromStorage(bucket, value, value);
 }
 
 function encodeBase64(bytes: Uint8Array): string {
@@ -541,6 +551,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Method not allowed" }, 405);
     }
 
+    // Shared-secret gate: the DB trigger sends x-webhook-secret. Enforced only
+    // when WEBHOOK_SECRET is configured, so the fn can ship before the secret is
+    // set, then be activated by setting the env var + the Vault secret.
+    if (WEBHOOK_SECRET && req.headers.get("x-webhook-secret") !== WEBHOOK_SECRET) {
+      return jsonResponse({ error: "Unauthorized" }, 401);
+    }
+
     const body = await req.json();
     const submissionId = parseSubmissionId(body);
     if (!submissionId) {
@@ -608,8 +625,8 @@ Deno.serve(async (req: Request) => {
     let selfieImg: FetchedImage;
     try {
       [receiptImg, selfieImg] = await Promise.all([
-        fetchImageBytes(submission.receipt_url),
-        fetchImageBytes(submission.selfie_url),
+        fetchImageBytes("submitted-receipt", submission.receipt_url),
+        fetchImageBytes("submitted-selfie", submission.selfie_url),
       ]);
     } catch (error) {
       console.error("Failed to fetch submission images", error);
@@ -720,12 +737,18 @@ Deno.serve(async (req: Request) => {
       if (addrConflict) issues.push(addrConflict);
     }
 
-    let decision: "approved" | "pending" = "pending";
+    let decision: "approved" | "pending" | "rejected" = "pending";
     let adminNotes: string;
 
     if (issues.length === 0) {
       decision = "approved";
       adminNotes = "Auto-approved: receipt parsed, selfie verified, merchant matches, no duplicates, receipt within 21 days.";
+    } else if (hashDup.found) {
+      // Exact same-user receipt-image duplicate: a definitive re-submission, not a
+      // judgment call. Auto-reject it — it can never be farmed, and it upholds the
+      // per-user unique index on (user_id, receipt_hash) for non-rejected rows.
+      decision = "rejected";
+      adminNotes = `Auto-rejected (duplicate): ${issues.join("; ")}.`;
     } else {
       adminNotes = `AI review flagged ${issues.length} issue(s): ${issues.join("; ")}.`;
     }
@@ -754,10 +777,30 @@ Deno.serve(async (req: Request) => {
       updatePayload.reviewed_at = new Date().toISOString();
     }
 
-    const { error: updateError } = await supabaseAdmin
+    const firstUpdate = await supabaseAdmin
       .from("submissions")
       .update(updatePayload)
       .eq("id", submissionId);
+    let updateError = firstUpdate.error;
+
+    // Backstop for a race where two identical submissions are processed
+    // concurrently: the per-user unique index (user_id, receipt_hash) on
+    // non-rejected rows rejects the second hash write with 23505. Treat it as the
+    // duplicate it is and reject (a rejected row is excluded from the index).
+    if (updateError && (updateError as { code?: string }).code === "23505") {
+      decision = "rejected";
+      adminNotes = "Auto-rejected (duplicate): a prior submission already holds this receipt.";
+      const retry = await supabaseAdmin
+        .from("submissions")
+        .update({
+          ...updatePayload,
+          status: "rejected",
+          reviewed_at: new Date().toISOString(),
+          admin_notes: adminNotes,
+        })
+        .eq("id", submissionId);
+      updateError = retry.error;
+    }
 
     if (updateError) {
       console.error("Failed to update submission", updateError);
