@@ -56,17 +56,33 @@ export default function RegisterScreen() {
     setFormData(prev => ({ ...prev, [key]: value }));
   };
 
+  // Display order for the live requirements checklist. Labels MUST match the
+  // strings pushed by validatePassword below so met/unmet can be cross-checked.
+  const PASSWORD_RULES_ORDER = [
+    'At least 6 characters',
+    'One lowercase letter',
+    'One uppercase letter',
+    'One number',
+    'One special character',
+  ];
+
   const validatePassword = (password: string) => {
     const errors: string[] = [];
     
+    if (password.length < 6) {
+      errors.push('At least 6 characters');
+    }
     if (!/[a-z]/.test(password)) {
-      errors.push('lowercase letter');
+      errors.push('One lowercase letter');
     }
     if (!/[A-Z]/.test(password)) {
-      errors.push('uppercase letter');
+      errors.push('One uppercase letter');
     }
     if (!/\d/.test(password)) {
-      errors.push('digit');
+      errors.push('One number');
+    }
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      errors.push('One special character');
     }
     
     return errors;
@@ -98,16 +114,13 @@ export default function RegisterScreen() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
+    // Length + character-class rules are all enforced by validatePassword below.
 
     const passwordValidationErrors = validatePassword(formData.password);
     if (passwordValidationErrors.length > 0) {
       Alert.alert(
-        'Invalid Password', 
-        `Password must contain: ${passwordValidationErrors.join(', ')}`
+        'Invalid Password',
+        `Your password still needs:\n• ${passwordValidationErrors.join('\n• ')}`
       );
       return;
     }
@@ -150,7 +163,9 @@ export default function RegisterScreen() {
   };
 
   const goToLogin = () => {
-    router.back();
+    // Navigate to the login screen explicitly. `router.back()` was popping the
+    // stack back to wherever the user came from (e.g. the Profile tab), not /login.
+    router.replace('/login');
   };
 
   return (
@@ -242,21 +257,22 @@ export default function RegisterScreen() {
                 )}
               </TouchableOpacity>
             </View>
-            {/* Password Requirements Display */}
-            {formData.password.length > 0 && passwordErrors.length > 0 && (
+            {/* Live password requirements checklist (✓ met / ✗ not yet) */}
+            {formData.password.length > 0 && (
               <View style={styles.passwordRequirements}>
-                <Text style={styles.passwordRequirementsTitle}>Password must contain:</Text>
-                {passwordErrors.map((error, index) => (
-                  <Text key={index} style={styles.passwordRequirementItem}>
-                    • {error}
-                  </Text>
-                ))}
-              </View>
-            )}
-            {/* Password Success Display */}
-            {formData.password.length > 0 && passwordErrors.length === 0 && formData.password.length >= 6 && (
-              <View style={styles.passwordSuccess}>
-                <Text style={styles.passwordSuccessText}>✓ Password meets all requirements</Text>
+                {PASSWORD_RULES_ORDER.map((rule) => {
+                  const met = !passwordErrors.includes(rule);
+                  return (
+                    <View key={rule} style={styles.passwordRequirementRow}>
+                      <Text style={[styles.passwordRequirementMark, met ? styles.reqMet : styles.reqUnmet]}>
+                        {met ? '✓' : '✗'}
+                      </Text>
+                      <Text style={[styles.passwordRequirementText, met ? styles.reqMetText : styles.reqUnmetText]}>
+                        {rule}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
             )}
           </View>
@@ -563,33 +579,28 @@ const styles = StyleSheet.create({
   passwordRequirements: {
     marginTop: 8,
     padding: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#E5E7EB',
     borderRadius: 8,
   },
-  passwordRequirementsTitle: {
+  passwordRequirementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  passwordRequirementMark: {
+    width: 16,
+    fontSize: 13,
+    fontWeight: '700',
+    marginRight: 8,
+    textAlign: 'center',
+  },
+  passwordRequirementText: {
     fontSize: 12,
-    color: '#DC2626',
-    fontWeight: '600',
-    marginBottom: 4,
   },
-  passwordRequirementItem: {
-    fontSize: 11,
-    color: '#DC2626',
-    marginLeft: 8,
-  },
-  passwordSuccess: {
-    marginTop: 8,
-    padding: 12,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 8,
-  },
-  passwordSuccessText: {
-    fontSize: 12,
-    color: '#15803D',
-    fontWeight: '600',
-  },
+  reqMet: { color: '#16A34A' },
+  reqUnmet: { color: '#9CA3AF' },
+  reqMetText: { color: '#15803D' },
+  reqUnmetText: { color: '#6B7280' },
 });
