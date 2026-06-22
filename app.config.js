@@ -7,6 +7,9 @@ const pkg = require("./package.json");
 // Requires eas.json -> cli.appVersionSource = "local" for EAS to respect them.
 const buildNumber = pkg.buildNumber;
 
+// Local dev points the app at an http:// Supabase
+const allowLocalHttp = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").startsWith("http://");
+
 module.exports = {
   expo: {
     name: "Wegood4u",
@@ -38,7 +41,10 @@ module.exports = {
         NSCameraUsageDescription:
           "Wegood4u needs access to your camera so you can take receipt and selfie photos as travel proof for your visits.",
         NSPhotoLibraryUsageDescription:
-          "Wegood4u needs access to your photo library so you can upload receipt and selfie photos as travel proof and update your profile picture."
+          "Wegood4u needs access to your photo library so you can upload receipt and selfie photos as travel proof and update your profile picture.",
+        // Dev-only: allow cleartext http to the LOCAL Supabase. Added only when the
+        // Supabase URL is http:// (local); production https builds get no exception.
+        ...(allowLocalHttp ? { NSAppTransportSecurity: { NSAllowsLocalNetworking: true } } : {})
       }
     },
     android: {
