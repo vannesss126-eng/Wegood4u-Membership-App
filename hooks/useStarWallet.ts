@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 export interface UseStarWalletReturn {
@@ -12,6 +12,9 @@ export function useStarWallet(userId: string | undefined): UseStarWalletReturn {
   const [balance, setBalance] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Unique per hook instance.
+  const channelKey = useRef(`sw-${Math.random().toString(36).slice(2)}`).current;
 
   const fetchBalance = useCallback(async () => {
     if (!userId) {
@@ -45,7 +48,7 @@ export function useStarWallet(userId: string | undefined): UseStarWalletReturn {
     if (!userId) return;
 
     const channel = supabase
-      .channel(`star_wallet:${userId}`)
+      .channel(`star_wallet:${userId}:${channelKey}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'star_wallet', filter: `user_id=eq.${userId}` },
@@ -56,7 +59,7 @@ export function useStarWallet(userId: string | undefined): UseStarWalletReturn {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, fetchBalance]);
+  }, [userId, fetchBalance, channelKey]);
 
   return { balance, isLoading, error, refetch: fetchBalance };
 }
