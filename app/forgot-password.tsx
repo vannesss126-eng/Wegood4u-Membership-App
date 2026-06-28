@@ -9,13 +9,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Mail, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
 export default function ForgotPasswordScreen() {
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -82,7 +84,12 @@ export default function ForgotPasswordScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        <View style={styles.content}>
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: insets.bottom + 24 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={styles.iconContainer}>
             <Lock size={64} color="#206E56" />
           </View>
@@ -168,7 +175,7 @@ export default function ForgotPasswordScreen() {
               If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.
             </Text>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -205,8 +212,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 20,
+  },
+  contentContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
+    padding: 20,
+    paddingTop: 24,
   },
   iconContainer: {
     alignItems: 'center',

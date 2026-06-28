@@ -15,10 +15,13 @@ interface ProfileFrameProps {
 
 // Composites a user avatar inside the tier frame from assets/images/tier_frame/.
 // The frame swaps automatically as the Visit Badge tier crosses (Bronze → Silver
-// → Gold → Platinum). When `tier` is null we render a plain circle so verified
-// members who haven't completed a cycle yet still see their avatar.
+// → Gold → Platinum). When `tier` is null (no rank yet) we render a full-size
+// avatar with a neutral default ring, so it reads as an intentional frame
+// instead of a small avatar floating inside an empty frame.
 export default function ProfileFrame({ avatarUri, tier, size = 96 }: ProfileFrameProps) {
-  const innerSize = Math.round(size * 0.72);
+  // Ranked: avatar is inset so the tier frame shows around it.
+  // Unranked: avatar fills the whole footprint (the ring is its "frame").
+  const innerSize = tier ? Math.round(size * 0.72) : size;
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
@@ -37,6 +40,7 @@ export default function ProfileFrame({ avatarUri, tier, size = 96 }: ProfileFram
             height: innerSize,
             borderRadius: innerSize / 2,
           },
+          !tier && styles.defaultRing,
         ]}
       >
         {avatarUri ? (
@@ -67,6 +71,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Neutral default frame for users who haven't earned a Visit Badge tier yet,
+  // so the avatar never appears inside an empty frame.
+  defaultRing: {
+    borderWidth: 3,
+    borderColor: '#CBEED2',
   },
   avatar: {
     width: '100%',
