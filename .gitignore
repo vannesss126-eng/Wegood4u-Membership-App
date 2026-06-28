@@ -42,3 +42,6 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# local-only QA harness — contains local Supabase keys, must never be committed
+scripts/local-qa-verify.sh
