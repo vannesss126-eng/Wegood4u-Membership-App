@@ -16,8 +16,18 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Storage config — adjust if your bucket/prefix differ
-const STORAGE_BUCKET = "user-uploads";
+// User content is stored across these private buckets, each keyed by a
+// `${uid}/` folder prefix (see the storage RLS policies in the migrations).
+// ALL of them must be purged on account deletion. NOTE: the previous value
+// ("user-uploads") was a bucket that does not exist, so no user files were ever
+// deleted — receipts (PII) and selfies (faces) were orphaned in storage while
+// the function still returned success.
+const STORAGE_BUCKETS = [
+  "submitted-receipt",
+  "submitted-selfie",
+  "profilePic",
+  "submission-share-screenshots",
+];
 const STORAGE_PAGE_SIZE = 1000;
 const storagePrefixFor = (uid: string) => `${uid}/`;
 
@@ -62,39 +72,45 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Failed to delete DB records", details: rpcError.message ?? rpcError }, 500);
     }
 
-    // 2) Delete storage objects under the user's prefix (best-effort, paginated)
+    // 2) Delete storage objects under the user's prefix in EVERY user-content
+    //    bucket (best-effort, paginated). IMPORTANT: paths returned by
+    //    .list(prefix) are RELATIVE to the prefix, so they must be re-prefixed
+    //    with `${uid}/` before passing to .remove(), or nothing is deleted.
     const storageFailures: string[] = [];
-    try {
-      let offset = 0;
-      while (true) {
-        const listRes = await supabaseAdmin.storage
-          .from(STORAGE_BUCKET)
-          .list(storagePrefixFor(userId), { limit: STORAGE_PAGE_SIZE, offset });
+    const prefix = storagePrefixFor(userId);
+    for (const bucket of STORAGE_BUCKETS) {
+      try {
+        let offset = 0;
+        while (true) {
+          const listRes = await supabaseAdmin.storage
+            .from(bucket)
+            .list(prefix, { limit: STORAGE_PAGE_SIZE, offset });
 
-        if (listRes.error) {
-          console.warn("storage.list error", listRes.error);
-          storageFailures.push(`list_error:${String(listRes.error.message ?? listRes.error)}`);
-          break;
+          if (listRes.error) {
+            console.warn(`storage.list error [${bucket}]`, listRes.error);
+            storageFailures.push(`${bucket}:list_error:${String(listRes.error.message ?? listRes.error)}`);
+            break;
+          }
+
+          const items = listRes.data ?? [];
+          if (items.length === 0) break;
+
+          const paths = items.map((it: any) => `${prefix}${it.name}`);
+          const rm = await supabaseAdmin.storage.from(bucket).remove(paths);
+          if (rm.error) {
+            console.warn(`storage.remove error [${bucket}]`, rm.error);
+            storageFailures.push(`${bucket}:remove_error_offset_${offset}:${String(rm.error.message ?? rm.error)}`);
+            // Continue attempting further pages
+          }
+
+          // If fewer than page size, we're done with this bucket
+          if (items.length < STORAGE_PAGE_SIZE) break;
+          offset += STORAGE_PAGE_SIZE;
         }
-
-        const items = listRes.data ?? [];
-        if (items.length === 0) break;
-
-        const paths = items.map((it: any) => it.name);
-        const rm = await supabaseAdmin.storage.from(STORAGE_BUCKET).remove(paths);
-        if (rm.error) {
-          console.warn("storage.remove error", rm.error);
-          storageFailures.push(`remove_error_offset_${offset}:${String(rm.error.message ?? rm.error)}`);
-          // Continue attempting further pages
-        }
-
-        // If fewer than page size, we're done
-        if (items.length < STORAGE_PAGE_SIZE) break;
-        offset += STORAGE_PAGE_SIZE;
+      } catch (e) {
+        console.warn(`Unexpected exception during storage cleanup [${bucket}]`, e);
+        storageFailures.push(`${bucket}:exception:${String(e)}`);
       }
-    } catch (e) {
-      console.warn("Unexpected exception during storage cleanup", e);
-      storageFailures.push(`exception:${String(e)}`);
     }
 
     // 3) Delete the Auth user (final step)
