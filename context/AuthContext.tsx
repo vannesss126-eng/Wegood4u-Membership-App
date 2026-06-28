@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getAuthErrorMessage } from '@/lib/authErrors';
 import type { User, Session } from '@supabase/supabase-js';
 import type { AuthContextType } from '@/types';
 
@@ -73,10 +74,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('Session:', data.session ? 'present' : 'missing');
       console.log('User:', data.user ? 'present' : 'missing');
     } catch (error: any) {
-      console.error('Error type:', typeof error);
-      console.error('Error message:', error.message);
+      // Single quiet dev log (was two console.error calls, each of which popped
+      // its own red-box LogBox error in dev). Throw a clear, user-facing message.
+      if (__DEV__) console.log('signIn failed:', error?.code ?? error?.status ?? error?.message);
       setIsLoading(false); // Make sure to set loading to false on error
-      throw new Error(error.message || 'Login failed');
+      throw new Error(getAuthErrorMessage(error));
     }
   };
 
