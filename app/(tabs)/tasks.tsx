@@ -221,7 +221,7 @@ export default function TasksScreen() {
                           styles.storeTypeText,
                           { color: selectedStore?.id === store.id ? 'rgba(255, 255, 255, 0.8)' : '#64748B' }
                         ]}>
-                          {store.type === "Coffee & Desserts" ? "Cafe" : store.type}
+                          {store.type}
                         </Text>
                       </View>
                     </TouchableOpacity>

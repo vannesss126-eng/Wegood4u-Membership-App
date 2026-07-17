@@ -29,7 +29,7 @@ export default function MapScreen() {
     {
       id: 1,
       name: 'Cafe Luna',
-      type: 'Coffee & Desserts',
+      type: 'Cafe',
       rating: 4.8,
       image: 'https://images.pexels.com/photos/260922/pexels-photo-260922.jpeg?auto=compress&cs=tinysrgb&w=400',
       phone: '+1 (555) 123-4567',
