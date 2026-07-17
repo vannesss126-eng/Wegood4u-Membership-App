@@ -250,7 +250,8 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         ) : userData.role === 'admin' ? (
-          // Admin: Show only pending submissions count
+          // Admin: pending submissions + Admin Console entry (replaces the
+          // Badge/Favorites cards a normal member sees).
           <View style={styles.section}>
             <View style={styles.adminStatsContainer}>
               <View style={styles.adminStatItem}>
@@ -261,6 +262,15 @@ export default function ProfileScreen() {
                 <Text style={styles.adminStatLabel}>Pending Submissions</Text>
               </View>
             </View>
+
+            <TouchableOpacity
+              style={styles.adminConsoleButton}
+              onPress={() => router.push('/admin')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.adminConsoleText}>Admin Console</Text>
+              <ChevronRight size={22} color="white" />
+            </TouchableOpacity>
           </View>
         ) : (
           // Member & Affiliate: Show full stats section
@@ -525,6 +535,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     fontWeight: '600',
+  },
+  adminConsoleButton: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#206E56',
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginTop: 16,
+  },
+  adminConsoleText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
   },
   illustrationContainer: {
     alignItems: 'center',

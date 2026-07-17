@@ -194,6 +194,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+// A throwaway client for admin provisioning. It creates auth users via signUp
+// WITHOUT persisting a session, so the admin's own login stays untouched. Used by
+// the Admin Console's "Create Partner Account" flow — no service_role involved.
+export function createProvisioningClient() {
+  return createClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
 // Database types (you can generate these later with Supabase CLI)
 export type Database = {
   public: {
@@ -215,7 +228,7 @@ export type Database = {
           travel_preference: string | null;
           accommodation_preference: string | null;
           travel_budget: string | null;
-          role: 'subscriber' | 'member' | 'affiliate' | 'admin';
+          role: 'subscriber' | 'member' | 'affiliate' | 'admin' | 'event' | 'vendors';
           verification_completed: boolean;
           affiliate_request_status: 'pending' | 'approved' | 'rejected' | null;
           avatar_url: string | null;
@@ -238,7 +251,7 @@ export type Database = {
           travel_preference?: string | null;
           accommodation_preference?: string | null;
           travel_budget?: string | null;
-          role?: 'subscriber' | 'member' | 'affiliate' | 'admin';
+          role?: 'subscriber' | 'member' | 'affiliate' | 'admin' | 'event' | 'vendors';
           verification_completed?: boolean;
           affiliate_request_status?: 'pending' | 'approved' | 'rejected' | null;
           avatar_url?: string | null;
@@ -261,7 +274,7 @@ export type Database = {
           travel_preference?: string | null;
           accommodation_preference?: string | null;
           travel_budget?: string | null;
-          role?: 'subscriber' | 'member' | 'affiliate' | 'admin';
+          role?: 'subscriber' | 'member' | 'affiliate' | 'admin' | 'event' | 'vendors';
           verification_completed?: boolean;
           affiliate_request_status?: 'pending' | 'approved' | 'rejected' | null;
           avatar_url?: string | null;
@@ -379,7 +392,7 @@ export type Database = {
           id: string;
           username: string | null;
           full_name: string | null;
-          role: 'subscriber' | 'member' | 'affiliate' | 'admin';
+          role: 'subscriber' | 'member' | 'affiliate' | 'admin' | 'event' | 'vendors';
           total_submissions: number;
           approved_submissions: number;
           pending_submissions: number;
