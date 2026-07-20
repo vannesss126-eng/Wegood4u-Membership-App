@@ -8,6 +8,7 @@ import {
   Image,
   Modal,
   FlatList,
+  Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, ChevronDown, CheckCircle2 } from 'lucide-react-native';
@@ -130,36 +131,82 @@ export default function SubmissionComponent({
     }
   };
 
-  const pickImage = async (type: 'receipt' | 'selfie') => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'receipt' ? [4, 3] : [1, 1],
-      quality: 0.8,
-    });
+  const applyPickedPhoto = (
+    type: 'receipt' | 'selfie',
+    result: ImagePicker.ImagePickerResult
+  ) => {
+    if (result.canceled) return;
+    if (type === 'receipt') {
+      setReceiptPhoto(result.assets[0].uri);
+    } else {
+      setSelfiePhoto(result.assets[0].uri);
+    }
+  };
 
-    if (!result.canceled) {
-      if (type === 'receipt') {
-        setReceiptPhoto(result.assets[0].uri);
-      } else {
-        setSelfiePhoto(result.assets[0].uri);
-      }
+  // iOS only *checks* the permission inside launchCameraAsync/launchImageLibraryAsync
+  // and rejects if it was never granted, while Android asks on our behalf. So we have
+  // to ask ourselves, or the picker silently does nothing on iPhone.
+  const ensurePermission = async (source: 'camera' | 'library') => {
+    const label = source === 'camera' ? 'Camera' : 'Photos';
+    const current =
+      source === 'camera'
+        ? await ImagePicker.getCameraPermissionsAsync()
+        : await ImagePicker.getMediaLibraryPermissionsAsync();
+
+    let status = current;
+    if (!status.granted && status.canAskAgain) {
+      status =
+        source === 'camera'
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+
+    if (status.granted) return true;
+
+    Alert.alert(
+      `${label} access needed`,
+      `Wegood4u needs ${label.toLowerCase()} access to add your receipt and selfie photos. Please enable it in Settings.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+      ]
+    );
+    return false;
+  };
+
+  const pickImage = async (type: 'receipt' | 'selfie') => {
+    try {
+      if (!(await ensurePermission('library'))) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: type === 'receipt' ? [4, 3] : [1, 1],
+        quality: 0.8,
+      });
+
+      applyPickedPhoto(type, result);
+    } catch (error) {
+      console.error('[submission] pickImage failed', error);
+      Alert.alert('Could not open photos', 'Please try again.');
     }
   };
 
   const takePhoto = async (type: 'receipt' | 'selfie') => {
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: type === 'receipt' ? [4, 3] : [1, 1],
-      quality: 0.8,
-    });
+    try {
+      if (!(await ensurePermission('camera'))) return;
 
-    if (!result.canceled) {
-      if (type === 'receipt') {
-        setReceiptPhoto(result.assets[0].uri);
-      } else {
-        setSelfiePhoto(result.assets[0].uri);
-      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: type === 'receipt' ? [4, 3] : [1, 1],
+        quality: 0.8,
+      });
+
+      applyPickedPhoto(type, result);
+    } catch (error) {
+      console.error('[submission] takePhoto failed', error);
+      Alert.alert('Could not open camera', 'Please try again.');
     }
   };
 
