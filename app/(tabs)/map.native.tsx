@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,104 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker, Callout, type Region } from 'react-native-maps';
+import Supercluster from 'supercluster';
 import { MapPin, Star, Phone, Clock, Navigation, ChevronDown } from 'lucide-react-native';
 import { fetchPartnerStores, groupStoresByCity } from '@/data/partnerStore';
 import type { PartnerStore } from '@/types';
 import { FallbackMap } from '@/components/FallbackMap';
+
+// Custom-view markers force react-native-maps to rasterize the pin into a
+// bitmap on every ViewChangesTracker tick. With tracksViewChanges left at its
+// default (true) that loop leaks bitmaps until the app OOM-crashes. Our pin is
+// a static SVG, so we only need to track changes until it has painted once,
+// then turn tracking off.
+function VenueMarker({ store, onPress }: { store: PartnerStore; onPress: () => void }) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setTracksViewChanges(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Marker
+      coordinate={{ latitude: store.latitude, longitude: store.longitude }}
+      onPress={onPress}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View style={styles.markerContainer}>
+        <View style={styles.marker}>
+          <MapPin size={20} color="#F33F32" />
+        </View>
+      </View>
+      <Callout>
+        <View style={styles.calloutContainer}>
+          <Text style={styles.calloutTitle}>{store.name}</Text>
+          <Text style={styles.calloutType}>{store.type}</Text>
+          <Text style={styles.calloutCity}>{store.city}</Text>
+          <View style={styles.calloutRating}>
+            <Star size={12} color="#FFD700" />
+            <Text style={styles.calloutRatingText}>{store.rating}</Text>
+          </View>
+        </View>
+      </Callout>
+    </Marker>
+  );
+}
+
+// A grouped-pin bubble shown when several stores sit close together at the
+// current zoom. Like VenueMarker, it must track view changes until the bubble
+// has rasterized once — on Android a custom-view Marker that mounts with
+// tracksViewChanges={false} never captures a bitmap and renders blank. The
+// count is baked into this component's key, so a changed count remounts it and
+// re-triggers the initial tracking window.
+function ClusterMarker({
+  longitude,
+  latitude,
+  count,
+  onPress,
+}: {
+  longitude: number;
+  latitude: number;
+  count: number;
+  onPress: () => void;
+}) {
+  const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setTracksViewChanges(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Marker
+      coordinate={{ latitude, longitude }}
+      onPress={onPress}
+      tracksViewChanges={tracksViewChanges}
+    >
+      <View style={styles.clusterMarker}>
+        <Text style={styles.clusterText}>{count}</Text>
+      </View>
+    </Marker>
+  );
+}
+
+// Convert a map Region to the [westLng, southLat, eastLng, northLat] bbox and
+// integer zoom level that supercluster's getClusters() expects.
+function regionToBBox(region: Region): [number, number, number, number] {
+  return [
+    region.longitude - region.longitudeDelta / 2,
+    region.latitude - region.latitudeDelta / 2,
+    region.longitude + region.longitudeDelta / 2,
+    region.latitude + region.latitudeDelta / 2,
+  ];
+}
+
+function regionToZoom(region: Region): number {
+  const zoom = Math.round(Math.log2(360 / region.longitudeDelta));
+  return Math.max(0, Math.min(20, zoom));
+}
 
 export default function MapScreen() {
   const [, setUserLocation] = useState<{
@@ -31,6 +124,10 @@ export default function MapScreen() {
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [showDropdown, setShowDropdown] = useState(false);
   const [expandedCities, setExpandedCities] = useState<{[key: string]: boolean}>({});
+  // Tracks the map's currently visible area so clustering recomputes at the
+  // right zoom as the user pans/zooms. Starts null and is seeded on first render.
+  const [visibleRegion, setVisibleRegion] = useState<Region | null>(null);
+  const mapRef = useRef<MapView>(null);
 
   // Group stores by city
   const groupedStores = groupStoresByCity(partnerStores);
@@ -118,7 +215,47 @@ export default function MapScreen() {
       longitudeDelta: 5,
     };
   };
-  
+
+  // Build the supercluster index from the currently filtered stores. Rebuilds
+  // only when the underlying data or the active filter changes — not on every
+  // pan — so panning/zooming stays cheap.
+  const clusterIndex = useMemo(() => {
+    const points = filteredStores
+      .filter(store => store.latitude !== 0 && store.longitude !== 0)
+      .map((store) => ({
+        type: 'Feature' as const,
+        properties: { store },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [store.longitude, store.latitude] as [number, number],
+        },
+      }));
+    const index = new Supercluster<{ store: PartnerStore }>({ radius: 50, maxZoom: 18 });
+    index.load(points);
+    return index;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partnerStores, selectedFilter]);
+
+  // The area we cluster for: the user's live viewport once known, else the
+  // filter-derived starting region.
+  const activeRegion = visibleRegion ?? getMapRegion();
+
+  const clusters = useMemo(
+    () => clusterIndex.getClusters(regionToBBox(activeRegion), regionToZoom(activeRegion)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [clusterIndex, activeRegion.latitude, activeRegion.longitude, activeRegion.latitudeDelta, activeRegion.longitudeDelta]
+  );
+
+  // Tapping a cluster zooms in to the level where it breaks apart.
+  const handleClusterPress = (clusterId: number, longitude: number, latitude: number) => {
+    const expansionZoom = Math.min(clusterIndex.getClusterExpansionZoom(clusterId), 18);
+    const delta = 360 / Math.pow(2, expansionZoom);
+    mapRef.current?.animateToRegion(
+      { latitude, longitude, latitudeDelta: delta, longitudeDelta: delta },
+      300
+    );
+  };
+
   const getSubtitleText = () => {
     const count = filteredStores.length;
     if (selectedFilter === 'All') {
@@ -353,40 +490,38 @@ export default function MapScreen() {
       <View style={styles.mapContainer}>
         {filteredStores.filter(store => store.latitude !== 0 && store.longitude !== 0).length > 0 ? (
           <MapView
+            ref={mapRef}
             style={styles.map}
             region={getMapRegion()}
+            onRegionChangeComplete={setVisibleRegion}
             showsUserLocation={true}
             showsMyLocationButton={true}
           >
-            {filteredStores
-              .filter(store => store.latitude !== 0 && store.longitude !== 0)
-              .map((store) => (
-              <Marker
-                key={store.id}
-                coordinate={{
-                  latitude: store.latitude,
-                  longitude: store.longitude,
-                }}
-                onPress={() => setSelectedStore(store)}
-              >
-                <View style={styles.markerContainer}>
-                  <View style={styles.marker}>
-                    <MapPin size={20} color="#F33F32" />
-                  </View>
-                </View>
-                <Callout>
-                  <View style={styles.calloutContainer}>
-                    <Text style={styles.calloutTitle}>{store.name}</Text>
-                    <Text style={styles.calloutType}>{store.type}</Text>
-                    <Text style={styles.calloutCity}>{store.city}</Text>
-                    <View style={styles.calloutRating}>
-                      <Star size={12} color="#FFD700" />
-                      <Text style={styles.calloutRatingText}>{store.rating}</Text>
-                    </View>
-                  </View>
-                </Callout>
-              </Marker>
-            ))}
+            {clusters.map((c) => {
+              const [longitude, latitude] = c.geometry.coordinates;
+              const props = c.properties;
+
+              if ('cluster' in props && props.cluster) {
+                return (
+                  <ClusterMarker
+                    key={`cluster-${props.cluster_id}-${props.point_count}`}
+                    longitude={longitude}
+                    latitude={latitude}
+                    count={props.point_count}
+                    onPress={() => handleClusterPress(props.cluster_id, longitude, latitude)}
+                  />
+                );
+              }
+
+              const store = props.store;
+              return (
+                <VenueMarker
+                  key={store.id}
+                  store={store}
+                  onPress={() => setSelectedStore(store)}
+                />
+              );
+            })}
           </MapView>
         ) : (
           <FallbackMap message="No partner stores available" />
@@ -628,6 +763,27 @@ const styles = StyleSheet.create({
   },
   markerContainer: {
     alignItems: 'center',
+  },
+  clusterMarker: {
+    minWidth: 40,
+    height: 40,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    backgroundColor: '#F33F32',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  clusterText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 14,
   },
   marker: {
     width: 30,
