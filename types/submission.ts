@@ -34,6 +34,10 @@ export interface TransformedSubmission {
   status: 'approved' | 'pending' | 'rejected';
   category: string;
   points?: number;
+  // Raw admin_notes (used to derive a friendly reject reason for the member).
+  adminNotes?: string | null;
+  // Raw ISO created_at, for on-demand image signing / relative-time display.
+  createdAtIso?: string;
 }
 
 // Approved submission counts for badges

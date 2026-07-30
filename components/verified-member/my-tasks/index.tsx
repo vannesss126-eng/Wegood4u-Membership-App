@@ -184,6 +184,7 @@ export default function MyTasks({ userData }: MyTasksProps) {
                           styles.historyStatus,
                           row.status.tone === 'approved' && { color: BAR_GREEN },
                           row.status.tone === 'rejected' && { color: '#EF4444' },
+                          row.status.tone === 'pending' && { color: '#B45309' },
                           row.status.tone === 'neutral' && { color: '#64748B' },
                         ]}
                       >

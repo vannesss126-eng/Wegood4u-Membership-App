@@ -12,21 +12,42 @@ import type {
 const RECEIPT_BUCKET = 'submitted-receipt';
 const SELFIE_BUCKET = 'submitted-selfie';
 const SIGNED_MEDIA_TTL_SECONDS = 3600;
+// Short TTL for member on-demand viewing (Pattern B in the architecture brief):
+// list views stay text-only, and a single image is signed only when the user
+// explicitly opens it — so a leaked URL dies within a minute.
+const ON_DEMAND_TTL_SECONDS = 60;
 
 // Receipts/selfies live in PRIVATE storage buckets; submissions.*_url columns now
 // hold the object path. Resolve short-lived signed URLs for display. Legacy rows
 // that still hold a full public URL (http...) are passed through unchanged.
-async function signOne(bucket: string, value: string | null | undefined): Promise<string> {
+async function signOne(
+  bucket: string,
+  value: string | null | undefined,
+  ttl: number = SIGNED_MEDIA_TTL_SECONDS
+): Promise<string> {
   if (!value) return '';
   if (/^https?:\/\//i.test(value)) return value;
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(value, SIGNED_MEDIA_TTL_SECONDS);
+    .createSignedUrl(value, ttl);
   if (error || !data?.signedUrl) {
     console.warn(`Failed to sign ${bucket} URL:`, error?.message);
     return '';
   }
   return data.signedUrl;
+}
+
+// On-demand signer for a SINGLE submission's receipt + selfie. Called only when a
+// member taps a row to view their proof — never for a whole list. Uses a 60s TTL.
+export async function signSubmissionImagesOnDemand(
+  receiptPath: string | null | undefined,
+  selfiePath: string | null | undefined
+): Promise<{ receipt: string; selfie: string }> {
+  const [receipt, selfie] = await Promise.all([
+    signOne(RECEIPT_BUCKET, receiptPath, ON_DEMAND_TTL_SECONDS),
+    signOne(SELFIE_BUCKET, selfiePath, ON_DEMAND_TTL_SECONDS),
+  ]);
+  return { receipt, selfie };
 }
 
 export async function signSubmissionMedia<
@@ -124,7 +145,9 @@ export function useUserSubmissions(userId: string) {
     receiptPhoto: item.receipt_url || '',
     selfiePhoto: item.selfie_url || '',
     status: item.status as 'approved' | 'pending' | 'rejected',
-    category: item.partner_store_category || 'others'
+    category: item.partner_store_category || 'others',
+    adminNotes: item.admin_notes ?? null,
+    createdAtIso: item.created_at,
   }));
 
   // Calculate approved counts for badges

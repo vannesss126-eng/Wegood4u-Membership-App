@@ -2,6 +2,7 @@ export interface PartnerStore {
   id: string;
   name: string;
   type: string;
+  country: string;
   city: string;
   address: string;
   latitude: number;
@@ -18,4 +19,11 @@ export interface PartnerStore {
 
 export interface GroupedStores {
   [city: string]: PartnerStore[];
+}
+
+// Country ▸ City ▸ Store, for the nested submission picker and map filter.
+export interface GroupedStoresByCountry {
+  [country: string]: {
+    [city: string]: PartnerStore[];
+  };
 }

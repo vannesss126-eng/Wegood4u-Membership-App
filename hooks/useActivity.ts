@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 export type ActivityEventType =
   | 'submission_approved'
   | 'submission_rejected'
+  | 'submission_pending'
   | 'share_verified'
   | 'daily_streak_milestone'
   | 'referral_qualified'

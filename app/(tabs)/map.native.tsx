@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,36 +12,57 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
 import MapView, { Marker, Callout, type Region } from 'react-native-maps';
 import Supercluster from 'supercluster';
 import { MapPin, Star, Phone, Clock, Navigation, ChevronDown } from 'lucide-react-native';
-import { fetchPartnerStores, groupStoresByCity } from '@/data/partnerStore';
+import { fetchPartnerStores, groupStoresByCountryAndCity } from '@/data/partnerStore';
 import type { PartnerStore } from '@/types';
 import { FallbackMap } from '@/components/FallbackMap';
+import { useUserLocation, getCachedUserLocation } from '@/lib/userLocation';
+import {
+  haversineDistanceM,
+  formatDistanceM,
+  isValidCoordinatePair,
+  type Coordinates,
+} from '@/lib/distance';
 
 // Custom-view markers force react-native-maps to rasterize the pin into a
 // bitmap on every ViewChangesTracker tick. With tracksViewChanges left at its
 // default (true) that loop leaks bitmaps until the app OOM-crashes. Our pin is
 // a static SVG, so we only need to track changes until it has painted once,
 // then turn tracking off.
-function VenueMarker({ store, onPress }: { store: PartnerStore; onPress: () => void }) {
+function VenueMarker({
+  store,
+  onPress,
+  distanceLabel,
+  highlighted,
+}: {
+  store: PartnerStore;
+  onPress: () => void;
+  distanceLabel?: string | null;
+  highlighted?: boolean;
+}) {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
+  // Re-rasterize on mount AND whenever the highlight flips. The marker stops
+  // tracking view changes after it first paints, so without re-arming this the
+  // highlighted look would never appear when a store is selected.
   useEffect(() => {
+    setTracksViewChanges(true);
     const timer = setTimeout(() => setTracksViewChanges(false), 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [highlighted]);
 
   return (
     <Marker
       coordinate={{ latitude: store.latitude, longitude: store.longitude }}
       onPress={onPress}
       tracksViewChanges={tracksViewChanges}
+      zIndex={highlighted ? 999 : 1}
     >
       <View style={styles.markerContainer}>
-        <View style={styles.marker}>
-          <MapPin size={20} color="#F33F32" />
+        <View style={[styles.marker, highlighted && styles.markerHighlighted]}>
+          <MapPin size={highlighted ? 24 : 20} color={highlighted ? '#FFFFFF' : '#F33F32'} />
         </View>
       </View>
       <Callout>
@@ -49,6 +70,9 @@ function VenueMarker({ store, onPress }: { store: PartnerStore; onPress: () => v
           <Text style={styles.calloutTitle}>{store.name}</Text>
           <Text style={styles.calloutType}>{store.type}</Text>
           <Text style={styles.calloutCity}>{store.city}</Text>
+          {distanceLabel ? (
+            <Text style={styles.calloutDistance}>{distanceLabel} away</Text>
+          ) : null}
           <View style={styles.calloutRating}>
             <Star size={12} color="#FFD700" />
             <Text style={styles.calloutRatingText}>{store.rating}</Text>
@@ -113,25 +137,61 @@ function regionToZoom(region: Region): number {
 }
 
 export default function MapScreen() {
-  const [, setUserLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  // Session-cached GPS fix (fetched once, shared across screens). null until the
+  // user grants permission and the first fix lands, or forever if they decline.
+  const userLocation = useUserLocation();
   const [partnerStores, setPartnerStores] = useState<PartnerStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStore, setSelectedStore] = useState<PartnerStore | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
   const [showDropdown, setShowDropdown] = useState(false);
-  const [expandedCities, setExpandedCities] = useState<{[key: string]: boolean}>({});
+  const [expandedCountries, setExpandedCountries] = useState<{ [key: string]: boolean }>({});
+  const [expandedCities, setExpandedCities] = useState<{ [key: string]: boolean }>({});
   // Tracks the map's currently visible area so clustering recomputes at the
   // right zoom as the user pans/zooms. Starts null and is seeded on first render.
   const [visibleRegion, setVisibleRegion] = useState<Region | null>(null);
   const mapRef = useRef<MapView>(null);
+  // Flips true once the user manually pans/drags, so the "center on me"
+  // auto-centering never yanks the map out from under them afterwards.
+  const userInteractedRef = useRef(false);
 
-  // Group stores by city
-  const groupedStores = groupStoresByCity(partnerStores);
-  const cities = Object.keys(groupedStores).sort();
+  // Distance (metres) from the user to a store. Infinity when either the user
+  // location or the store's coordinates are unknown, so those sort to the end.
+  const distanceOf = useCallback(
+    (store: PartnerStore): number => {
+      const coords = { latitude: store.latitude, longitude: store.longitude };
+      if (!userLocation || !isValidCoordinatePair(coords)) return Infinity;
+      return haversineDistanceM(userLocation, coords);
+    },
+    [userLocation]
+  );
+
+  // Group stores into a Country ▸ City ▸ Store tree.
+  const groupedByCountry = groupStoresByCountryAndCity(partnerStores);
+  // Set of all city names, for resolving a city-level filter.
+  const cityNames = new Set(partnerStores.map((s) => s.city));
+
+  // The nearest store in a list defines that group's rank (Feature ①).
+  const nearestInList = (list: PartnerStore[]) =>
+    list.length ? Math.min(...list.map(distanceOf)) : Infinity;
+
+  // Countries ordered nearest-first once we know where the user is; else A→Z.
+  const countryNames = Object.keys(groupedByCountry).sort((a, b) => {
+    if (!userLocation) return a.localeCompare(b);
+    const na = Math.min(...Object.values(groupedByCountry[a]).map(nearestInList));
+    const nb = Math.min(...Object.values(groupedByCountry[b]).map(nearestInList));
+    return na - nb;
+  });
+
+  // Cities within a country, ordered nearest-first; else A→Z.
+  const citiesOfCountry = (country: string) => {
+    const cityMap = groupedByCountry[country] ?? {};
+    return Object.keys(cityMap).sort((a, b) => {
+      if (!userLocation) return a.localeCompare(b);
+      return nearestInList(cityMap[a]) - nearestInList(cityMap[b]);
+    });
+  };
 
   const getFilteredStores = () => {
     if (!partnerStores || partnerStores.length === 0) {
@@ -143,10 +203,10 @@ export default function MapScreen() {
     }
     
     // Check if it's a city filter
-    if (cities.includes(selectedFilter)) {
+    if (cityNames.has(selectedFilter)) {
       return partnerStores.filter(store => store.city === selectedFilter);
     }
-    
+
     // Check if it's a specific store
     const specificStore = partnerStores.find(store => store.name === selectedFilter);
     return specificStore ? [specificStore] : partnerStores;
@@ -179,7 +239,7 @@ export default function MapScreen() {
     }
     
     // Check if it's a city filter
-    if (cities.includes(selectedFilter)) {
+    if (cityNames.has(selectedFilter)) {
       const cityStores = partnerStores.filter(store => store.city === selectedFilter && store.latitude !== 0 && store.longitude !== 0);
       if (cityStores.length > 0) {
         // Calculate center of city stores
@@ -216,11 +276,38 @@ export default function MapScreen() {
     };
   };
 
-  // Build the supercluster index from the currently filtered stores. Rebuilds
-  // only when the underlying data or the active filter changes — not on every
-  // pan — so panning/zooming stays cheap.
+  // A viewport centred on the user, zoomed just wide enough to include their
+  // nearest partner store so at least one pin is visible on open.
+  const buildUserRegion = (loc: Coordinates): Region => {
+    const nearestM = partnerStores.reduce((min, s) => {
+      const coords = { latitude: s.latitude, longitude: s.longitude };
+      if (!isValidCoordinatePair(coords)) return min;
+      return Math.min(min, haversineDistanceM(loc, coords));
+    }, Infinity);
+    // ~2.5× the nearest-store distance as padding, clamped to a ~3km–55km view.
+    let delta = 0.05;
+    if (Number.isFinite(nearestM)) {
+      delta = Math.min(0.5, Math.max(0.03, ((nearestM / 1000) * 2.5) / 111));
+    }
+    return {
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      latitudeDelta: delta,
+      longitudeDelta: delta,
+    };
+  };
+
+  // The region the map first mounts with: the user's area if a cached fix is
+  // already available, otherwise the all-stores overview.
+  const cachedFix = getCachedUserLocation();
+  const initialRegion = cachedFix ? buildUserRegion(cachedFix) : getMapRegion();
+
+  // Build the supercluster index from ALL stores (not the current selection) so
+  // the whole network stays visible on the map — picking a store/city just moves
+  // the camera, it never hides the other pins. Rebuilds only when the data
+  // changes, not on every pan, so panning/zooming stays cheap.
   const clusterIndex = useMemo(() => {
-    const points = filteredStores
+    const points = partnerStores
       .filter(store => store.latitude !== 0 && store.longitude !== 0)
       .map((store) => ({
         type: 'Feature' as const,
@@ -233,12 +320,11 @@ export default function MapScreen() {
     const index = new Supercluster<{ store: PartnerStore }>({ radius: 50, maxZoom: 18 });
     index.load(points);
     return index;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partnerStores, selectedFilter]);
+  }, [partnerStores]);
 
   // The area we cluster for: the user's live viewport once known, else the
-  // filter-derived starting region.
-  const activeRegion = visibleRegion ?? getMapRegion();
+  // region the map opened with.
+  const activeRegion = visibleRegion ?? initialRegion;
 
   const clusters = useMemo(
     () => clusterIndex.getClusters(regionToBBox(activeRegion), regionToZoom(activeRegion)),
@@ -271,9 +357,23 @@ export default function MapScreen() {
   };
 
   useEffect(() => {
-    getUserLocation();
     loadPartnerStores();
   }, []);
+
+  // Center on the user once their location is known, and re-center whenever the
+  // dropdown filter changes. An explicit city/store selection always wins; on
+  // "All" we only recentre on the user if they haven't manually panned yet.
+  useEffect(() => {
+    if (selectedFilter === 'All') {
+      if (userInteractedRef.current) return;
+      if (userLocation) {
+        mapRef.current?.animateToRegion(buildUserRegion(userLocation), 600);
+      }
+      return;
+    }
+    mapRef.current?.animateToRegion(getMapRegion(), 500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFilter, userLocation]);
 
   const loadPartnerStores = async () => {
     try {
@@ -288,13 +388,15 @@ export default function MapScreen() {
       
       setPartnerStores(stores);
       
-      // Initialize expanded cities state
-      const cities = [...new Set(stores.map(store => store.city))];
-      const initialExpandedState = cities.reduce((acc, city) => {
-        acc[city] = false;
-        return acc;
-      }, {} as {[key: string]: boolean});
-      setExpandedCities(initialExpandedState);
+      // Countries start expanded (usually Malaysia + Thailand); cities collapsed.
+      const countries = [...new Set(stores.map((store) => store.country))];
+      setExpandedCountries(
+        countries.reduce((acc, country) => {
+          acc[country] = true;
+          return acc;
+        }, {} as { [key: string]: boolean })
+      );
+      setExpandedCities({});
     } catch (err) {
       console.error('Error loading partner stores:', err);
       setError('Failed to load partner stores. Please check your internet connection and try again.');
@@ -306,41 +408,15 @@ export default function MapScreen() {
     }
   };
 
-  const getUserLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Location permission denied, using fallback coordinates');
-        // Don't show alert to avoid blocking the UI
-        setUserLocation({
-          latitude: 18.79210626514222, 
-          longitude: 98.99534619999957,
-        });
-        return;
-      }
+  const cityKey = (country: string, city: string) => `${country}::${city}`;
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-    } catch (error) {
-      console.error('Error getting location:', error);
-      // Fallback to Thailand coordinates
-      setUserLocation({
-        latitude: 18.79210626514222, 
-        longitude: 98.99534619999957,
-      });
-    }
+  const toggleCountryExpansion = (country: string) => {
+    setExpandedCountries((prev) => ({ ...prev, [country]: !prev[country] }));
   };
 
-  const toggleCityExpansion = (city: string) => {
-    setExpandedCities(prev => ({
-      ...prev,
-      [city]: !prev[city]
-    }));
+  const toggleCityExpansion = (country: string, city: string) => {
+    const key = cityKey(country, city);
+    setExpandedCities((prev) => ({ ...prev, [key]: !prev[key] }));
   };
   const getDirections = (store: PartnerStore) => {
     Alert.alert(
@@ -488,12 +564,15 @@ export default function MapScreen() {
       </View>
 
       <View style={styles.mapContainer}>
-        {filteredStores.filter(store => store.latitude !== 0 && store.longitude !== 0).length > 0 ? (
+        {partnerStores.filter(store => store.latitude !== 0 && store.longitude !== 0).length > 0 ? (
           <MapView
             ref={mapRef}
             style={styles.map}
-            region={getMapRegion()}
+            initialRegion={initialRegion}
             onRegionChangeComplete={setVisibleRegion}
+            onPanDrag={() => {
+              userInteractedRef.current = true;
+            }}
             showsUserLocation={true}
             showsMyLocationButton={true}
           >
@@ -514,10 +593,17 @@ export default function MapScreen() {
               }
 
               const store = props.store;
+              const distanceLabel =
+                userLocation &&
+                isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude })
+                  ? formatDistanceM(distanceOf(store))
+                  : null;
               return (
                 <VenueMarker
                   key={store.id}
                   store={store}
+                  distanceLabel={distanceLabel}
+                  highlighted={selectedStore?.id === store.id}
                   onPress={() => setSelectedStore(store)}
                 />
               );
@@ -607,6 +693,7 @@ export default function MapScreen() {
                 selectedFilter === 'All' && styles.selectedDropdownItem
               ]}
               onPress={() => {
+                userInteractedRef.current = false;
                 setSelectedFilter('All');
                 setShowDropdown(false);
                 setSelectedStore(null);
@@ -623,74 +710,108 @@ export default function MapScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Chiang Mai Section */}
-            {/* Dynamic City Sections */}
-            {cities.map((city) => {
-              const cityStores = groupedStores[city] || [];
+            {/* Country ▸ City ▸ Store */}
+            {countryNames.map((country) => {
+              const countryOpen = expandedCountries[country];
+              const cityList = citiesOfCountry(country);
+              const countryStoreCount = cityList.reduce(
+                (sum, c) => sum + (groupedByCountry[country][c]?.length ?? 0),
+                0
+              );
               return (
-                <React.Fragment key={city}>
+                <React.Fragment key={country}>
+                  {/* Country Header - Collapsible */}
                   <TouchableOpacity
-                    style={[
-                      styles.dropdownItem,
-                      styles.cityHeader,
-                      selectedFilter === city && styles.selectedDropdownItem
-                    ]}
-                    onPress={() => {
-                      if (expandedCities[city]) {
-                        // If expanded, collapse it
-                        toggleCityExpansion(city);
-                      } else {
-                        // If collapsed, expand it and optionally select the city
-                        toggleCityExpansion(city);
-                        setSelectedFilter(city);
-                        setSelectedStore(null);
-                      }
-                    }}
+                    style={[styles.dropdownItem, styles.countryHeader]}
+                    onPress={() => toggleCountryExpansion(country)}
                   >
-                    <Text style={[
-                      styles.dropdownItemText,
-                      styles.cityHeaderText,
-                      selectedFilter === city && styles.selectedDropdownItemText
-                    ]}>
-                      {city}
+                    <Text style={[styles.dropdownItemText, styles.countryHeaderText]}>
+                      {country}
                     </Text>
-                    <Text style={[
-                      styles.storeCount,
-                      selectedFilter === city && { color: 'rgba(255,255,255,0.8)' }
-                    ]}>
-                      {cityStores.length} stores
-                    </Text>
+                    <Text style={styles.storeCount}>{countryStoreCount} stores</Text>
                   </TouchableOpacity>
 
-                  {/* City Stores */}
-                  {expandedCities[city] && cityStores.map((store) => (
-                    <TouchableOpacity
-                      key={store.id}
-                      style={[
-                        styles.dropdownItem,
-                        styles.storeItem,
-                        selectedFilter === store.name && styles.selectedDropdownItem
-                      ]}
-                      onPress={() => {
-                        setSelectedFilter(store.name);
-                        setShowDropdown(false);
-                        setSelectedStore(store);
-                      }}
-                    >
-                      <Text style={[
-                        styles.storeItemText,
-                        selectedFilter === store.name && styles.selectedDropdownItemText
-                      ]}>
-                        • {store.name}
-                      </Text>
-                      <Text style={[
-                        styles.storeTypeText,
-                        selectedFilter === store.name && { color: 'rgba(255,255,255,0.8)' }
-                      ]}>
-                        {store.type}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                  {countryOpen &&
+                    cityList.map((city) => {
+                      const cityStores = [...(groupedByCountry[country][city] || [])].sort(
+                        (a, b) => distanceOf(a) - distanceOf(b)
+                      );
+                      const cityOpen = expandedCities[cityKey(country, city)];
+                      return (
+                        <React.Fragment key={city}>
+                          <TouchableOpacity
+                            style={[
+                              styles.dropdownItem,
+                              styles.cityHeader,
+                              styles.cityHeaderNested,
+                              selectedFilter === city && styles.selectedDropdownItem,
+                            ]}
+                            onPress={() => {
+                              toggleCityExpansion(country, city);
+                              if (!cityOpen) {
+                                setSelectedFilter(city);
+                                setSelectedStore(null);
+                              }
+                            }}
+                          >
+                            <Text style={[
+                              styles.dropdownItemText,
+                              styles.cityHeaderText,
+                              selectedFilter === city && styles.selectedDropdownItemText,
+                            ]}>
+                              {city}
+                            </Text>
+                            <Text style={[
+                              styles.storeCount,
+                              selectedFilter === city && { color: 'rgba(255,255,255,0.8)' },
+                            ]}>
+                              {cityStores.length} stores
+                            </Text>
+                          </TouchableOpacity>
+
+                          {/* City Stores */}
+                          {cityOpen &&
+                            cityStores.map((store) => (
+                              <TouchableOpacity
+                                key={store.id}
+                                style={[
+                                  styles.dropdownItem,
+                                  styles.storeItem,
+                                  styles.storeItemNested,
+                                  selectedFilter === store.name && styles.selectedDropdownItem,
+                                ]}
+                                onPress={() => {
+                                  setSelectedFilter(store.name);
+                                  setShowDropdown(false);
+                                  setSelectedStore(store);
+                                }}
+                              >
+                                <Text style={[
+                                  styles.storeItemText,
+                                  selectedFilter === store.name && styles.selectedDropdownItemText,
+                                ]}>
+                                  • {store.name}
+                                </Text>
+                                <Text style={[
+                                  styles.storeTypeText,
+                                  selectedFilter === store.name && { color: 'rgba(255,255,255,0.8)' },
+                                ]}>
+                                  {store.type}
+                                </Text>
+                                {userLocation &&
+                                  isValidCoordinatePair({ latitude: store.latitude, longitude: store.longitude }) && (
+                                    <Text style={[
+                                      styles.storeDistanceText,
+                                      selectedFilter === store.name && { color: 'rgba(255,255,255,0.9)' },
+                                    ]}>
+                                      {formatDistanceM(distanceOf(store))} away
+                                    </Text>
+                                  )}
+                              </TouchableOpacity>
+                            ))}
+                        </React.Fragment>
+                      );
+                    })}
                 </React.Fragment>
               );
             })}
@@ -799,6 +920,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
+  markerHighlighted: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#206E56',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   calloutContainer: {
     width: 150,
     padding: 8,
@@ -817,6 +945,12 @@ const styles = StyleSheet.create({
   calloutCity: {
     fontSize: 11,
     color: '#F33F32',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  calloutDistance: {
+    fontSize: 11,
+    color: '#206E56',
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -977,12 +1111,27 @@ const styles = StyleSheet.create({
   selectedDropdownItem: {
     backgroundColor: '#F33F32',
   },
+  countryHeader: {
+    backgroundColor: '#EEF2F1',
+    borderWidth: 1,
+    borderColor: '#CBEED2',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  countryHeaderText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#206E56',
+  },
   cityHeader: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  cityHeaderNested: {
+    marginLeft: 12,
   },
   cityHeaderText: {
     fontWeight: 'bold',
@@ -993,6 +1142,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fafbfc',
     borderLeftWidth: 3,
     borderLeftColor: '#e2e8f0',
+  },
+  storeItemNested: {
+    marginLeft: 24,
   },
   dropdownItemText: {
     fontSize: 16,
@@ -1017,6 +1169,12 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginTop: 2,
     fontStyle: 'italic',
+  },
+  storeDistanceText: {
+    fontSize: 11,
+    color: '#206E56',
+    fontWeight: '600',
+    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,

@@ -14,8 +14,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Camera, ChevronDown, CheckCircle2 } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { optimizeSubmissionImage } from '@/lib/optimizeSubmissionImage';
-import type { PartnerStore } from '@/types';
+import type { PartnerStore, TransformedSubmission } from '@/types';
 import ShareEarnCard from '@/components/submission/ShareEarnCard';
+import MySubmissionsList from './MySubmissionsList';
 
 interface SubmissionProps {
   userData: any;
@@ -25,6 +26,8 @@ interface SubmissionProps {
   partnerStores: PartnerStore[];
   fetchSubmissions: (showRefreshIndicator?: boolean) => Promise<void>;
   onSubmitSuccess?: () => void;
+  submissions: TransformedSubmission[];
+  submissionsLoading?: boolean;
 }
 
 const BAR_GREEN = '#206E56';
@@ -53,6 +56,8 @@ export default function SubmissionComponent({
   partnerStores,
   fetchSubmissions,
   onSubmitSuccess,
+  submissions,
+  submissionsLoading,
 }: SubmissionProps) {
   const today = useMemo(() => new Date(), []);
   const currentYear = today.getFullYear();
@@ -566,6 +571,9 @@ export default function SubmissionComponent({
           {isSubmitting ? 'Submitting…' : 'Submit'}
         </Text>
       </TouchableOpacity>
+
+      {/* Member's submission history — text-only, tap a row to view images */}
+      <MySubmissionsList submissions={submissions} isLoading={submissionsLoading} />
 
       {renderPickerModal()}
     </View>
