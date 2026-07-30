@@ -29,7 +29,11 @@ export default function VerifiedMember({
 }: VerifiedMemberProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('my-tasks');
 
-  const { refetch: fetchSubmissions } = useUserSubmissions(userData?.id);
+  const {
+    submissions: mySubmissions,
+    isLoading: submissionsLoading,
+    refetch: fetchSubmissions,
+  } = useUserSubmissions(userData?.id);
   const { balance: starBalance } = useStarWallet(userData?.id);
 
   return (
@@ -87,6 +91,8 @@ export default function VerifiedMember({
             setShowStoreDropdown={setShowStoreDropdown}
             partnerStores={partnerStores}
             fetchSubmissions={fetchSubmissions}
+            submissions={mySubmissions}
+            submissionsLoading={submissionsLoading}
             onSubmitSuccess={() => setActiveTab('my-tasks')}
           />
         )}

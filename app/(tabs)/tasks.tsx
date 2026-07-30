@@ -11,8 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search, ChevronRight, X, RefreshCw, Activity as ActivityIndicator } from 'lucide-react-native';
 import { useAuth } from '@/context/AuthContext';
 import { useUser } from '@/context/UserContext';
-import { fetchPartnerStores, groupStoresByCity } from '@/data/partnerStore';
-import type { PartnerStore } from '@/types';
+import { fetchPartnerStores, groupStoresByCountryAndCity } from '@/data/partnerStore';
+import type { PartnerStore, GroupedStoresByCountry } from '@/types';
 import UnverifiedMember from '@/components/unverified-member/UnverifiedMember';
 import VerifiedMember from '@/components/verified-member/VerifiedMember';
 import AdminTaskScreen from '@/components/admin-member/AdminTaskScreen';
@@ -29,36 +29,44 @@ export default function TasksScreen() {
   const [selectedStore, setSelectedStore] = useState<PartnerStore | null>(null);
   const [showStoreDropdown, setShowStoreDropdown] = useState(false);
   const [storeSearchQuery, setStoreSearchQuery] = useState('');
-  const [expandedCities, setExpandedCities] = useState<{[key: string]: boolean}>({});
+  const [expandedCountries, setExpandedCountries] = useState<{ [key: string]: boolean }>({});
+  const [expandedCities, setExpandedCities] = useState<{ [key: string]: boolean }>({});
 
-  // Group stores by city
-  const groupedStores = groupStoresByCity(partnerStores);
+  // Group stores into a Country ▸ City ▸ Store tree.
+  const groupedByCountry = groupStoresByCountryAndCity(partnerStores);
 
-  // Filter stores based on search query
-  const getFilteredStores = () => {
+  // Filter the tree by store-name search, keeping only branches with matches.
+  const getFilteredTree = (): GroupedStoresByCountry => {
     if (!storeSearchQuery.trim()) {
-      return groupedStores;
+      return groupedByCountry;
     }
-    
-    const filtered: {[key: string]: PartnerStore[]} = {};
-    Object.entries(groupedStores).forEach(([city, stores]) => {
-      const filteredStores = stores.filter(store =>
-        store.name.toLowerCase().includes(storeSearchQuery.toLowerCase())
-      );
-      if (filteredStores.length > 0) {
-        filtered[city] = filteredStores;
-      }
+    const q = storeSearchQuery.toLowerCase();
+    const filtered: GroupedStoresByCountry = {};
+    Object.entries(groupedByCountry).forEach(([country, cities]) => {
+      Object.entries(cities).forEach(([city, stores]) => {
+        const matches = stores.filter((store) => store.name.toLowerCase().includes(q));
+        if (matches.length > 0) {
+          if (!filtered[country]) filtered[country] = {};
+          filtered[country][city] = matches;
+        }
+      });
     });
     return filtered;
   };
 
-  const filteredGroupedStores = getFilteredStores();
+  const filteredTree = getFilteredTree();
+  // While searching, show every matching branch expanded.
+  const isSearching = storeSearchQuery.trim().length > 0;
 
-  const toggleCityExpansion = (city: string) => {
-    setExpandedCities(prev => ({
-      ...prev,
-      [city]: !prev[city]
-    }));
+  const cityKey = (country: string, city: string) => `${country}::${city}`;
+
+  const toggleCountryExpansion = (country: string) => {
+    setExpandedCountries((prev) => ({ ...prev, [country]: !prev[country] }));
+  };
+
+  const toggleCityExpansion = (country: string, city: string) => {
+    const key = cityKey(country, city);
+    setExpandedCities((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   useEffect(() => {
@@ -71,14 +79,16 @@ export default function TasksScreen() {
       setStoresError(null);
       const stores = await fetchPartnerStores();
       setPartnerStores(stores);
-      
-      // Initialize expanded cities state
-      const cities = [...new Set(stores.map(store => store.city))];
-      const initialExpandedState = cities.reduce((acc, city) => {
-        acc[city] = false;
-        return acc;
-      }, {} as {[key: string]: boolean});
-      setExpandedCities(initialExpandedState);
+
+      // Countries start expanded (usually just Malaysia + Thailand); cities collapsed.
+      const countries = [...new Set(stores.map((store) => store.country))];
+      setExpandedCountries(
+        countries.reduce((acc, country) => {
+          acc[country] = true;
+          return acc;
+        }, {} as { [key: string]: boolean })
+      );
+      setExpandedCities({});
     } catch (err) {
       console.error('Error loading partner stores:', err);
       setStoresError('Failed to load partner stores');
@@ -174,63 +184,106 @@ export default function TasksScreen() {
                 )}
               </View>
 
-              {/* Store List */}
-              {Object.entries(filteredGroupedStores).map(([city, stores]) => (
-                <React.Fragment key={city}>
-                  {/* City Header - Collapsible */}
-                  <TouchableOpacity 
-                    style={[styles.cityHeader, { backgroundColor: '#FFFFFF', borderBottomColor: '#E2E8F0' }]}
-                    onPress={() => toggleCityExpansion(city)}
-                  >
-                    <View style={styles.cityHeaderContent}>
-                      <Text style={[styles.cityHeaderText, { color: '#206E56' }]}>{city}</Text>
-                      <Text style={[styles.cityStoreCount, { color: '#64748B' }]}>({stores.length} stores)</Text>
-                    </View>
-                    <ChevronRight 
-                      size={20} 
-                      color="#64748B" 
-                      style={[
-                        styles.cityChevron,
-                        expandedCities[city] && styles.cityChevronExpanded
-                      ]}
-                    />
-                  </TouchableOpacity>
-
-                  {/* Store Items - Show when expanded */}
-                  {expandedCities[city] && stores.map((store) => (
+              {/* Store List: Country ▸ City ▸ Store */}
+              {Object.entries(filteredTree).map(([country, cities]) => {
+                const countryOpen = isSearching || expandedCountries[country];
+                const countryStoreCount = Object.values(cities).reduce(
+                  (sum, list) => sum + list.length,
+                  0
+                );
+                return (
+                  <React.Fragment key={country}>
+                    {/* Country Header - Collapsible */}
                     <TouchableOpacity
-                      key={store.id}
-                      style={[
-                        styles.storeItem,
-                        selectedStore?.id === store.id && { backgroundColor: '#206E56' }
-                      ]}
-                      onPress={() => {
-                        setSelectedStore(store);
-                        setShowStoreDropdown(false);
-                        setStoreSearchQuery('');
-                      }}
+                      style={styles.countryHeader}
+                      onPress={() => toggleCountryExpansion(country)}
                     >
-                      <View style={styles.storeItemContent}>
-                        <Text style={[
-                          styles.storeItemText,
-                          { color: selectedStore?.id === store.id ? 'white' : '#000000' }
-                        ]}>
-                          {store.name}
-                        </Text>
-                        <Text style={[
-                          styles.storeTypeText,
-                          { color: selectedStore?.id === store.id ? 'rgba(255, 255, 255, 0.8)' : '#64748B' }
-                        ]}>
-                          {store.type}
+                      <View style={styles.cityHeaderContent}>
+                        <Text style={styles.countryHeaderText}>{country}</Text>
+                        <Text style={[styles.cityStoreCount, { color: '#64748B' }]}>
+                          ({countryStoreCount})
                         </Text>
                       </View>
+                      <ChevronRight
+                        size={20}
+                        color="#206E56"
+                        style={[styles.cityChevron, countryOpen && styles.cityChevronExpanded]}
+                      />
                     </TouchableOpacity>
-                  ))}
-                </React.Fragment>
-              ))}
+
+                    {countryOpen &&
+                      Object.entries(cities).map(([city, stores]) => {
+                        const cityOpen = isSearching || expandedCities[cityKey(country, city)];
+                        return (
+                          <React.Fragment key={city}>
+                            {/* City Header - Collapsible */}
+                            <TouchableOpacity
+                              style={[styles.cityHeader, styles.cityHeaderNested, { borderBottomColor: '#E2E8F0' }]}
+                              onPress={() => toggleCityExpansion(country, city)}
+                            >
+                              <View style={styles.cityHeaderContent}>
+                                <Text style={[styles.cityHeaderText, { color: '#206E56' }]}>{city}</Text>
+                                <Text style={[styles.cityStoreCount, { color: '#64748B' }]}>
+                                  ({stores.length} stores)
+                                </Text>
+                              </View>
+                              <ChevronRight
+                                size={18}
+                                color="#64748B"
+                                style={[styles.cityChevron, cityOpen && styles.cityChevronExpanded]}
+                              />
+                            </TouchableOpacity>
+
+                            {/* Store Items */}
+                            {cityOpen &&
+                              stores.map((store) => (
+                                <TouchableOpacity
+                                  key={store.id}
+                                  style={[
+                                    styles.storeItem,
+                                    styles.storeItemNested,
+                                    selectedStore?.id === store.id && { backgroundColor: '#206E56' },
+                                  ]}
+                                  onPress={() => {
+                                    setSelectedStore(store);
+                                    setShowStoreDropdown(false);
+                                    setStoreSearchQuery('');
+                                  }}
+                                >
+                                  <View style={styles.storeItemContent}>
+                                    <Text
+                                      style={[
+                                        styles.storeItemText,
+                                        { color: selectedStore?.id === store.id ? 'white' : '#000000' },
+                                      ]}
+                                    >
+                                      {store.name}
+                                    </Text>
+                                    <Text
+                                      style={[
+                                        styles.storeTypeText,
+                                        {
+                                          color:
+                                            selectedStore?.id === store.id
+                                              ? 'rgba(255, 255, 255, 0.8)'
+                                              : '#64748B',
+                                        },
+                                      ]}
+                                    >
+                                      {store.type}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              ))}
+                          </React.Fragment>
+                        );
+                      })}
+                  </React.Fragment>
+                );
+              })}
 
               {/* No Results Message */}
-              {Object.keys(filteredGroupedStores).length === 0 && storeSearchQuery.length > 0 && (
+              {Object.keys(filteredTree).length === 0 && storeSearchQuery.length > 0 && (
                 <View style={styles.noResultsContainer}>
                   <Text style={[styles.noResultsText, { color: '#64748B' }]}>No stores found matching &quot;{storeSearchQuery}&quot;</Text>
                   <TouchableOpacity 
@@ -335,6 +388,22 @@ const styles = StyleSheet.create({
   storeList: {
     maxHeight: 300,
   },
+  countryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: '#F1F5F9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  countryHeaderText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#206E56',
+    marginRight: 8,
+  },
   cityHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -342,6 +411,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  cityHeaderNested: {
+    paddingLeft: 32,
   },
   storeItem: {
     flexDirection: 'row',
@@ -350,6 +423,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+  },
+  storeItemNested: {
+    paddingLeft: 48,
   },
   storeItemText: {
     fontSize: 14,

@@ -2,7 +2,7 @@ import type { ActivityEvent } from '@/hooks/useActivity';
 
 export interface EventDescriptor {
   target: string;
-  status: { text: string; tone: 'approved' | 'rejected' | 'neutral' } | null;
+  status: { text: string; tone: 'approved' | 'rejected' | 'pending' | 'neutral' } | null;
   trailing: { text: string; tone: 'star' | 'progress' | 'voucher' | 'visit' } | null;
 }
 
@@ -25,6 +25,12 @@ export function describeActivityEvent(event: ActivityEvent): EventDescriptor {
       return {
         target: event.target,
         status: { text: 'Rejected', tone: 'rejected' },
+        trailing: null,
+      };
+    case 'submission_pending':
+      return {
+        target: event.target,
+        status: { text: 'Pending', tone: 'pending' },
         trailing: null,
       };
     case 'share_verified': {

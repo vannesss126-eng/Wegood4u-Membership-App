@@ -375,6 +375,14 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# review-submission is invoked by a Postgres trigger (trg_ai_review_on_submission_insert)
+# via net.http_post, which sends ONLY the x-webhook-secret header — no JWT. Verify JWT
+# MUST stay OFF or Supabase's API gateway rejects the trigger's call with 401 BEFORE the
+# function runs (symptom: empty function logs, Anthropic API never called, admin_notes
+# stays NULL). Auth for this webhook is the shared WEBHOOK_SECRET, not a user JWT.
+[functions.review-submission]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

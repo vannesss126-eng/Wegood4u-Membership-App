@@ -1,10 +1,15 @@
 import { supabase } from '@/lib/supabase';
-import type { PartnerStore, GroupedStores } from '@/types';
+import type { PartnerStore, GroupedStores, GroupedStoresByCountry } from '@/types';
+
+// Fallback bucket for stores whose country hasn't been set yet (e.g. before the
+// add_partner_store_country migration is applied, or a newly-seeded store).
+const UNKNOWN_COUNTRY = 'Other';
 
 type PartnerStoreRow = {
   id: string;
   name: string;
   type: string | null;
+  country: string | null;
   city: string;
   address: string | null;
   latitude: number | null;
@@ -29,6 +34,7 @@ function mapRowToPartnerStore(row: PartnerStoreRow): PartnerStore | null {
     id: row.id,
     name: row.name,
     type: row.type ?? '',
+    country: row.country?.trim() || UNKNOWN_COUNTRY,
     city: row.city,
     address: row.address ?? '',
     latitude: row.latitude ?? 0,
@@ -122,6 +128,26 @@ export const groupStoresByCity = (stores: PartnerStore[]): GroupedStores => {
     acc[store.city].push(store);
     return acc;
   }, {} as GroupedStores);
+};
+
+/**
+ * Groups partner stores into a Country ▸ City ▸ Store tree for the nested
+ * submission picker and map filter. Stores with no country fall into "Other".
+ */
+export const groupStoresByCountryAndCity = (
+  stores: PartnerStore[]
+): GroupedStoresByCountry => {
+  return stores.reduce((acc: GroupedStoresByCountry, store) => {
+    const country = store.country?.trim() || UNKNOWN_COUNTRY;
+    if (!acc[country]) {
+      acc[country] = {};
+    }
+    if (!acc[country][store.city]) {
+      acc[country][store.city] = [];
+    }
+    acc[country][store.city].push(store);
+    return acc;
+  }, {} as GroupedStoresByCountry);
 };
 
 /**
