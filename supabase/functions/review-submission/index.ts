@@ -40,11 +40,28 @@ const AI_REVIEWER_ID = "11b60765-9911-4985-9cbf-0ba4d568303c";
 const CLAUDE_MODEL = "claude-sonnet-4-6";
 const RECEIPT_MAX_AGE_DAYS = 21;
 
+// Token pricing for CLAUDE_MODEL (USD per 1M tokens), used only to log an
+// estimated cost per submission so we can baseline spend before any future
+// model switch (e.g. Gemini). Update these if CLAUDE_MODEL changes.
+// claude-sonnet-4-6: $3.00 / 1M input, $15.00 / 1M output.
+const USD_PER_INPUT_TOKEN = 3.0 / 1_000_000;
+const USD_PER_OUTPUT_TOKEN = 15.0 / 1_000_000;
+
 type MediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 
 interface FetchedImage {
   bytes: Uint8Array;
   mediaType: MediaType;
+}
+
+// Token accounting returned by the Anthropic API on every response, kept so we
+// can log per-submission cost. cache_* fields are 0 unless prompt caching is on.
+interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+  estimated_cost_usd: number;
 }
 
 interface ExtractedSubmission {
@@ -261,7 +278,7 @@ function isReceiptTooOld(receiptDate: string, submissionCreatedAt: string): bool
 async function extractSubmissionData(
   receipt: FetchedImage,
   selfie: FetchedImage,
-): Promise<ExtractedSubmission> {
+): Promise<{ extracted: ExtractedSubmission; usage: TokenUsage }> {
   const receiptB64 = encodeBase64(receipt.bytes);
   const selfieB64 = encodeBase64(selfie.bytes);
 
@@ -342,6 +359,22 @@ Return the JSON object only.`;
   }
 
   const result = await response.json();
+
+  // Token accounting. Anthropic returns `usage` on every successful response.
+  const rawUsage = result?.usage ?? {};
+  const inputTokens = Number(rawUsage.input_tokens) || 0;
+  const outputTokens = Number(rawUsage.output_tokens) || 0;
+  const cacheReadTokens = Number(rawUsage.cache_read_input_tokens) || 0;
+  const cacheCreationTokens = Number(rawUsage.cache_creation_input_tokens) || 0;
+  const usage: TokenUsage = {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cache_read_input_tokens: cacheReadTokens,
+    cache_creation_input_tokens: cacheCreationTokens,
+    estimated_cost_usd:
+      inputTokens * USD_PER_INPUT_TOKEN + outputTokens * USD_PER_OUTPUT_TOKEN,
+  };
+
   const textBlock = Array.isArray(result?.content)
     ? result.content.find((block: any) => block?.type === "text")
     : null;
@@ -372,7 +405,7 @@ Return the JSON object only.`;
       : null;
   const dinerCount = adultSetItems.length > 0 ? setsSum : modelDinerCount;
 
-  return {
+  const extracted: ExtractedSubmission = {
     receipt: {
       date: receiptData.date ? normalizeDate(receiptData.date) : null,
       total_amount: Number.isFinite(totalAmount) ? totalAmount : null,
@@ -390,6 +423,8 @@ Return the JSON object only.`;
       receipt_visible: selfieData.receipt_visible === true,
     },
   };
+
+  return { extracted, usage };
 }
 
 async function checkHashDuplicate(submissionId: number, userId: string, receiptHash: string) {
@@ -657,10 +692,26 @@ Deno.serve(async (req: Request) => {
       selfie: { person_visible: false, receipt_visible: false },
     };
     let aiError: string | null = null;
+    let usage: TokenUsage | null = null;
 
     if (!hashDup.found && !oversizeReceipt && !oversizeSelfie) {
       try {
-        extracted = await extractSubmissionData(receiptImg, selfieImg);
+        const result = await extractSubmissionData(receiptImg, selfieImg);
+        extracted = result.extracted;
+        usage = result.usage;
+        // Structured, greppable token line — one per real Claude call. Filter the
+        // Edge Function logs by "TOKEN_USAGE" to baseline per-submission spend.
+        console.log(
+          `TOKEN_USAGE ${JSON.stringify({
+            submission_id: submissionId,
+            model: CLAUDE_MODEL,
+            input_tokens: usage.input_tokens,
+            output_tokens: usage.output_tokens,
+            cache_read_input_tokens: usage.cache_read_input_tokens,
+            cache_creation_input_tokens: usage.cache_creation_input_tokens,
+            estimated_cost_usd: Number(usage.estimated_cost_usd.toFixed(6)),
+          })}`,
+        );
       } catch (error) {
         console.warn("Submission extraction failed", error);
         aiError = (error as Error).message;
@@ -813,6 +864,7 @@ Deno.serve(async (req: Request) => {
       admin_notes: adminNotes,
       extracted_data: extracted,
       receipt_hash: receiptHash,
+      token_usage: usage,
     });
   } catch (error) {
     console.error("Unexpected error in review-submission function", error);
