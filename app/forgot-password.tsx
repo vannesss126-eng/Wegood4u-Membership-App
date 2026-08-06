@@ -40,7 +40,10 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://wegood4u-web.web.app/reset-password',
+        // wegood4u.com (Vercel) is the live site now — the old Firebase
+        // wegood4u-web.web.app URL is not in Supabase's redirect allowlist, so it
+        // fell back to the Site URL (the homepage). This URL IS allowlisted.
+        redirectTo: 'https://wegood4u.com/reset-password',
       });
 
       if (error) {
