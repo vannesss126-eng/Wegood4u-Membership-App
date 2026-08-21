@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Eye, EyeOff, ChevronDown } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
+import { MAX_PASSWORD_LENGTH, PASSWORD_RULES, getPasswordErrors } from '@/lib/passwordPolicy';
 
 interface FormData {
   email: string;
@@ -57,40 +58,15 @@ export default function RegisterScreen() {
   };
 
   // Display order for the live requirements checklist. Labels MUST match the
-  // strings pushed by validatePassword below so met/unmet can be cross-checked.
-  const PASSWORD_RULES_ORDER = [
-    'At least 6 characters',
-    'One lowercase letter',
-    'One uppercase letter',
-    'One number',
-    'One special character',
-  ];
-
-  const validatePassword = (password: string) => {
-    const errors: string[] = [];
-    
-    if (password.length < 6) {
-      errors.push('At least 6 characters');
-    }
-    if (!/[a-z]/.test(password)) {
-      errors.push('One lowercase letter');
-    }
-    if (!/[A-Z]/.test(password)) {
-      errors.push('One uppercase letter');
-    }
-    if (!/\d/.test(password)) {
-      errors.push('One number');
-    }
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      errors.push('One special character');
-    }
-    
-    return errors;
-  };
+  // Rules now come from lib/passwordPolicy so this screen, change-password and
+  // the website's /reset-password page cannot disagree. They used to: signup
+  // accepted 6 characters while the web reset page demanded more than 8, so a
+  // password chosen here could be rejected during a reset.
+  const PASSWORD_RULES_ORDER = PASSWORD_RULES.map((rule) => rule.label);
 
   const handlePasswordChange = (text: string) => {
     updateFormData('password', text);
-    setPasswordErrors(validatePassword(text));
+    setPasswordErrors(getPasswordErrors(text));
   };
 
   const handleRegister = async () => {
@@ -114,9 +90,9 @@ export default function RegisterScreen() {
       return;
     }
 
-    // Length + character-class rules are all enforced by validatePassword below.
+    // Length + character-class rules are all enforced by getPasswordErrors below.
 
-    const passwordValidationErrors = validatePassword(formData.password);
+    const passwordValidationErrors = getPasswordErrors(formData.password);
     if (passwordValidationErrors.length > 0) {
       Alert.alert(
         'Invalid Password',
@@ -244,6 +220,7 @@ export default function RegisterScreen() {
                 placeholderTextColor="#999"
                 value={formData.password}
                 onChangeText={handlePasswordChange}
+                maxLength={MAX_PASSWORD_LENGTH}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity
