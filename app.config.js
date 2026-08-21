@@ -34,6 +34,7 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: "com.saysheji.wegood4u",
       buildNumber: String(buildNumber),
+      associatedDomains: ["applinks:wegood4u.com"],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -50,6 +51,33 @@ module.exports = {
     android: {
       versionCode: buildNumber,
       package: "com.saysheji.wegood4u",
+      // App Links. Scoped to the two auth landing paths ONLY — never the whole
+      // host, or the app would swallow /r/<code> and the marketing pages.
+      // Each path must have a matching screen in app/, or the OS opens the app
+      // to a dead end instead of letting the working website handle it.
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          // Exact `path`, not `pathPrefix`: a prefix would also claim
+          // /reset-password/success, which is a web-only screen the app has no
+          // route for. Query strings are not part of path matching, so
+          // ?token_hash=... still matches.
+          data: [
+            {
+              scheme: "https",
+              host: "wegood4u.com",
+              path: "/email-confirmed"
+            },
+            {
+              scheme: "https",
+              host: "wegood4u.com",
+              path: "/reset-password"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
