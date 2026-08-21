@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,7 +22,11 @@ import {
 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { StoreGridCardSkeleton } from '@/components/Skeleton';
+import Pagination from '@/components/Pagination';
 import type { PartnerStore } from '@/types';
+
+/** Stores rendered per page. Keeps the list light on lower-end devices. */
+const PAGE_SIZE = 12;
 
 type SortOption = 'rating' | 'alphabetical-az' | 'alphabetical-za';
 type LocationFilter = 'all' | 'malaysia' | 'thailand';
@@ -55,6 +59,8 @@ export default function PartnerStoreCategoryScreen({
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [showSortModal, setShowSortModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     load();
@@ -110,6 +116,31 @@ export default function PartnerStoreCategoryScreen({
 
     return sorted;
   }, [stores, searchQuery, sortBy, locationFilter]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredAndSortedStores.length / PAGE_SIZE)
+  );
+
+  // A narrowed result set can leave us past the last page.
+  useEffect(() => {
+    setPage(current => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  // Any change to the result set starts the user back at page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, sortBy, locationFilter]);
+
+  const paginatedStores = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredAndSortedStores.slice(start, start + PAGE_SIZE);
+  }, [filteredAndSortedStores, page]);
+
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
 
   const getSortDisplayText = () => {
     switch (sortBy) {
@@ -240,17 +271,21 @@ export default function PartnerStoreCategoryScreen({
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         {viewMode === 'grid' ? (
           <View style={styles.grid}>
-            {filteredAndSortedStores.map(renderGridCard)}
+            {paginatedStores.map(renderGridCard)}
           </View>
         ) : (
           <View style={styles.list}>
-            {filteredAndSortedStores.map((store, index) => (
+            {paginatedStores.map((store, index) => (
               <React.Fragment key={store.id}>
                 {renderListItem(store)}
-                {index < filteredAndSortedStores.length - 1 && (
+                {index < paginatedStores.length - 1 && (
                   <View style={styles.listDivider} />
                 )}
               </React.Fragment>
@@ -265,7 +300,13 @@ export default function PartnerStoreCategoryScreen({
           </View>
         )}
 
-        {filteredAndSortedStores.length > 0 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+
+        {filteredAndSortedStores.length > 0 && page === totalPages && (
           <View style={styles.endMessage}>
             <Text style={styles.endMessageText}>You&apos;ve reached the end!</Text>
           </View>
