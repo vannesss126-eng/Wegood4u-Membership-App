@@ -21,24 +21,20 @@ function DeepLinkHandler() {
         // Parse the URL
         const parsedUrl = Linking.parse(url);
         
-        // Check if it's a password reset link
-        if (parsedUrl.path === 'reset-password') {
-          const { type, token } = parsedUrl.queryParams || {};
-          
-          if (type === 'recovery' && token) {
-            console.log('Password reset deep link detected');
-            
-            // Only navigate if user is not authenticated (avoids confusing logged-in users)
-            if (!isAuthenticated) {
-              router.push(`/reset-confirm?token=${token}&type=${type}`);
-            } else {
-              console.warn('Deep link ignored: User already authenticated');
-              // Optional: Redirect to home or show a toast: router.push('/(tabs)');
-            }
-          }
-        }
+        // NOTE: there is deliberately no 'reset-password' branch here, and that
+        // is NOT because recovery is website-only — app/reset-password.tsx
+        // handles it in-app. Recovery arrives as a verified Universal Link /
+        // App Link (https://wegood4u.com/reset-password?token_hash=...), which
+        // expo-router routes by filename on its own; a manual branch here would
+        // only race it. Same for /email-confirmed.
+        // The old branch routed a wegood4u://reset-password deep link to a
+        // /reset-confirm screen that could never work: the scheme was not
+        // allow-listed, Supabase returns credentials in the URL fragment rather
+        // than a `token` query param, and setSession() rejects the empty
+        // refresh_token it passed. Both the branch and that screen are gone.
+
         // Check if it's an email confirmation link
-        else if (parsedUrl.path === 'confirm-email') {
+        if (parsedUrl.path === 'confirm-email') {
           const { access_token, refresh_token, type } = parsedUrl.queryParams || {};
           
           if (type === 'signup' && access_token) {
@@ -131,12 +127,22 @@ export default function RootLayout() {
             name="forgot-password" 
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="reset-confirm" 
+          {/* Receives the signup Universal Link / App Link
+              (https://wegood4u.com/email-confirmed?token_hash=...). Distinct from
+              "confirm-email/index" below, which is the in-app "check your inbox"
+              waiting screen. */}
+          <Stack.Screen
+            name="email-confirmed"
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="confirm-email/index" 
+          {/* Receives the recovery Universal Link / App Link
+              (https://wegood4u.com/reset-password?token_hash=...). */}
+          <Stack.Screen
+            name="reset-password"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="confirm-email/index"
             options={{ headerShown: false }}
           />
           <Stack.Screen 
