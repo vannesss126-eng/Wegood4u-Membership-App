@@ -21,17 +21,17 @@ function DeepLinkHandler() {
         // Parse the URL
         const parsedUrl = Linking.parse(url);
         
-        // NOTE: there is deliberately no 'reset-password' branch here, and that
-        // is NOT because recovery is website-only — app/reset-password.tsx
-        // handles it in-app. Recovery arrives as a verified Universal Link /
-        // App Link (https://wegood4u.com/reset-password?token_hash=...), which
-        // expo-router routes by filename on its own; a manual branch here would
-        // only race it. Same for /email-confirmed.
-        // The old branch routed a wegood4u://reset-password deep link to a
-        // /reset-confirm screen that could never work: the scheme was not
-        // allow-listed, Supabase returns credentials in the URL fragment rather
-        // than a `token` query param, and setSession() rejects the empty
-        // refresh_token it passed. Both the branch and that screen are gone.
+        // NOTE: there is deliberately no 'reset-password' branch here, and no
+        // in-app reset screen either. Password recovery is completed on the
+        // WEBSITE: the user sets the new password at
+        // https://wegood4u.com/reset-password and the success page hands off to
+        // the app afterwards. An in-app form could not work — login.tsx sits
+        // mounted underneath and redirects to /(tabs) the moment verifyOtp
+        // creates a session, tearing the form down before it can be filled in.
+        //
+        // /email-confirmed IS handled in-app, but not here: it arrives as a
+        // verified App Link that expo-router routes by filename on its own, and a
+        // manual branch would only race it.
 
         // Check if it's an email confirmation link
         if (parsedUrl.path === 'confirm-email') {
@@ -133,12 +133,6 @@ export default function RootLayout() {
               waiting screen. */}
           <Stack.Screen
             name="email-confirmed"
-            options={{ headerShown: false }}
-          />
-          {/* Receives the recovery Universal Link / App Link
-              (https://wegood4u.com/reset-password?token_hash=...). */}
-          <Stack.Screen
-            name="reset-password"
             options={{ headerShown: false }}
           />
           <Stack.Screen

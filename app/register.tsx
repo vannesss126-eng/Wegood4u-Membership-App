@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Eye, EyeOff, ChevronDown } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 import { MAX_PASSWORD_LENGTH, PASSWORD_RULES, getPasswordErrors } from '@/lib/passwordPolicy';
 
 interface FormData {
@@ -41,6 +42,12 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [showGenderDropdown, setShowGenderDropdown] = useState(false);
+  // Live availability of the Name field. 'unknown' also covers "the RPC isn't
+  // deployed yet", in which case we simply say nothing and let the submit-time
+  // message handle it — a broken check must never block a valid signup.
+  const [nameStatus, setNameStatus] = useState<
+    'idle' | 'checking' | 'available' | 'taken' | 'unknown'
+  >('idle');
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const { signUp } = useAuth();
@@ -69,6 +76,42 @@ export default function RegisterScreen() {
     setPasswordErrors(getPasswordErrors(text));
   };
 
+  // Debounced: one call after typing settles, not one per keystroke.
+  useEffect(() => {
+    const name = formData.displayName.trim();
+
+    if (name.length < 2) {
+      setNameStatus('idle');
+      return;
+    }
+
+    setNameStatus('checking');
+    let cancelled = false;
+
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('username_available', {
+        p_username: name,
+      });
+
+      if (cancelled) return;
+
+      // A missing function (migration not pushed) or any transport failure lands
+      // here. Stay quiet rather than guessing — handleRegister still catches the
+      // collision on submit.
+      if (error) {
+        setNameStatus('unknown');
+        return;
+      }
+
+      setNameStatus(data === false ? 'taken' : 'available');
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [formData.displayName]);
+
   const handleRegister = async () => {
     // Only require core fields
     if (!formData.email || !formData.password || !formData.displayName) {
@@ -83,6 +126,14 @@ export default function RegisterScreen() {
         Alert.alert('Error', 'Date of birth cannot be in the future');
         return;
       }
+    }
+
+    if (nameStatus === 'taken') {
+      Alert.alert(
+        'Name Already Taken',
+        `The name "${formData.displayName.trim()}" is already in use. Please choose a different name.`
+      );
+      return;
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -131,7 +182,27 @@ export default function RegisterScreen() {
         ]
       );
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message);
+      const message: string = error?.message ?? '';
+
+      // "Database error saving new user" is GoTrue's generic wrapper for ANY
+      // exception raised by the handle_new_user trigger. In practice it is almost
+      // always the profiles_username_key UNIQUE constraint: the trigger writes
+      // this Name straight into profiles.username, so a name someone already used
+      // aborts the whole signup with a message that blames the database and tells
+      // the user nothing they can act on.
+      if (
+        message.includes('Database error saving new user') ||
+        message.includes('duplicate key') ||
+        message.includes('profiles_username_key')
+      ) {
+        Alert.alert(
+          'Name Already Taken',
+          `The name "${formData.displayName.trim()}" is already in use. Please choose a different name — your email is fine.`
+        );
+        return;
+      }
+
+      Alert.alert('Registration Failed', message || 'Something went wrong. Please try again.');
     }
     finally {
       setSubmitting(false);
@@ -166,6 +237,17 @@ export default function RegisterScreen() {
               onChangeText={(text) => updateFormData('displayName', text)}
               autoCapitalize="words"
             />
+            {nameStatus === 'checking' && (
+              <Text style={styles.nameHintChecking}>Checking availability...</Text>
+            )}
+            {nameStatus === 'taken' && (
+              <Text style={styles.nameHintTaken}>
+                That name is already taken — please choose another.
+              </Text>
+            )}
+            {nameStatus === 'available' && (
+              <Text style={styles.nameHintAvailable}>That name is available.</Text>
+            )}
           </View>
 
           <View style={styles.inputGroup}>
@@ -414,6 +496,23 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     marginBottom: 24,
+  },
+  nameHintChecking: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#64748B',
+  },
+  nameHintTaken: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  nameHintAvailable: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#206E56',
+    fontWeight: '600',
   },
   inputLabel: {
     fontSize: 16,
