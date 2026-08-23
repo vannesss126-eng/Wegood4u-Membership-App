@@ -89,9 +89,14 @@ export default function ForgotPasswordScreen() {
 
       setEmailSent(true);
       setCooldown(RESEND_COOLDOWN_SECONDS);
+      // Deliberately conditional wording. Supabase returns success even when NO
+      // account matches — it refuses to reveal which addresses are registered, or
+      // this screen becomes an account-enumeration oracle. The old copy asserted
+      // "we sent it", so a typo'd address looked identical to a real one and sent
+      // people hunting for a mail that was never generated.
       Alert.alert(
-        'Reset Email Sent',
-        'We have sent a password reset link to your email. Please check your inbox and tap the link to reset your password.',
+        'Check Your Email',
+        'If an account exists for that address, we have sent it a password reset link. Please check your inbox, and double-check the spelling if nothing arrives.',
         [
           { text: 'OK' }
         ]
@@ -184,13 +189,20 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Check Your Email</Text>
               <Text style={styles.description}>
-                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password.
+                If an account exists for{' '}
+                <Text style={styles.emailEmphasis}>{email.trim()}</Text>, we&apos;ve sent it a
+                password reset link. Please check your inbox and tap the link to reset your
+                password.
               </Text>
               <Text style={[styles.description, styles.descriptionSpam]}>
                 If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.
               </Text>
               <Text style={styles.descriptionNewest}>
                 If you request another email, only the newest link will work.
+              </Text>
+              <Text style={styles.descriptionTypo}>
+                Nothing arrived? Check the address above for typos — a mistyped address
+                looks exactly the same on this screen as a real one.
               </Text>
 
               <View style={styles.successActions}>
@@ -287,9 +299,24 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
+  emailEmphasis: {
+    fontWeight: '700',
+    color: '#1e293b',
+  },
   descriptionSpam: {
     marginBottom: 12,
     fontWeight: '600',
+  },
+  descriptionTypo: {
+    fontSize: 14,
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    marginHorizontal: 4,
   },
   descriptionNewest: {
     fontSize: 14,
