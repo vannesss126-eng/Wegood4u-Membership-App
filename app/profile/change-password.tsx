@@ -14,6 +14,7 @@ import { ArrowLeft, Eye, EyeOff, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { MAX_PASSWORD_LENGTH, PASSWORD_RULES, getPasswordErrors } from '@/lib/passwordPolicy';
 
 export default function ChangePasswordScreen() {
   const { forceClearAuth } = useAuth();
@@ -23,25 +24,6 @@ export default function ChangePasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const validatePassword = (password: string) => {
-    const errors: string[] = [];
-    
-    if (password.length < 6) {
-      errors.push('at least 6 characters');
-    }
-    if (!/[a-z]/.test(password)) {
-      errors.push('lowercase letter');
-    }
-    if (!/[A-Z]/.test(password)) {
-      errors.push('uppercase letter');
-    }
-    if (!/\d/.test(password)) {
-      errors.push('digit');
-    }
-    
-    return errors;
-  };
 
   const handleChangePassword = async () => {
     // Input validation
@@ -55,11 +37,11 @@ export default function ChangePasswordScreen() {
       return;
     }
 
-    const passwordErrors = validatePassword(newPassword);
+    const passwordErrors = getPasswordErrors(newPassword);
     if (passwordErrors.length > 0) {
       Alert.alert(
         'Invalid Password',
-        `Password must contain: ${passwordErrors.join(', ')}`
+        `Your password still needs:\n• ${passwordErrors.join('\n• ')}`
       );
       return;
     }
@@ -68,19 +50,23 @@ export default function ChangePasswordScreen() {
     console.log('Starting password change process...');
 
     try {
-      // Step 1: Start password update (don't wait for promise resolution)
-      supabase.auth.updateUser({ password: newPassword });
-      console.log('Password update initiated...');
-      
-      // Step 2: Wait 3 seconds (password update happens on server)
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Step 3: Clear form and show success message
+      // This call used to be fired WITHOUT await, followed by a blind 3 second
+      // sleep and an unconditional success alert. Any server-side failure (weak
+      // password rejected, expired session, no network) was therefore reported to
+      // the user as "Password Changed Successfully" and they were signed out —
+      // leaving them unable to log in with either the old or the new password,
+      // which is exactly the "password features don't work" report we chased.
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (error) {
+        throw error;
+      }
+
       setNewPassword('');
       setConfirmPassword('');
-      console.log('Password change completed, showing success alert');
-      
-      // Step 4: Show success alert with logout option
+      console.log('Password change confirmed by server, showing success alert');
+
+      // Show success alert with logout option
       Alert.alert(
         'Password Changed Successfully',
         'Your password has been updated. Please log in again with your new password.',
@@ -113,9 +99,27 @@ export default function ChangePasswordScreen() {
       
     } catch (error: any) {
       console.error('Password change error:', error);
+
+      const message: string = error?.message ?? '';
+
+      // A stale session can't update a password. Say so and route them to a
+      // fresh login rather than showing a generic failure they can only retry.
+      if (
+        message.includes('session_not_found') ||
+        message.includes('Auth session missing') ||
+        message.includes('JWT expired')
+      ) {
+        Alert.alert(
+          'Session Expired',
+          'Your session has expired. Please log in again and then change your password.',
+          [{ text: 'OK', onPress: () => router.replace('/login') }]
+        );
+        return;
+      }
+
       Alert.alert(
-        'Error',
-        'Failed to change password. Please try again.'
+        'Password Not Changed',
+        message || 'Failed to change password. Please try again.'
       );
     } finally {
       setIsLoading(false);
@@ -139,6 +143,7 @@ export default function ChangePasswordScreen() {
           placeholderTextColor="#9CA3AF"
           value={value}
           onChangeText={onChangeText}
+          maxLength={MAX_PASSWORD_LENGTH}
           secureTextEntry={!showPassword}
           autoCapitalize="none"
           autoCorrect={false}
@@ -200,10 +205,13 @@ export default function ChangePasswordScreen() {
 
           <View style={styles.passwordRequirements}>
             <Text style={styles.requirementsTitle}>Password Requirements:</Text>
-            <Text style={styles.requirementItem}>• At least 6 characters</Text>
-            <Text style={styles.requirementItem}>• One uppercase letter</Text>
-            <Text style={styles.requirementItem}>• One lowercase letter</Text>
-            <Text style={styles.requirementItem}>• One number</Text>
+            {/* Rendered from the shared policy so this list cannot drift out of
+                sync with what validation actually enforces. */}
+            {PASSWORD_RULES.map((rule) => (
+              <Text key={rule.id} style={styles.requirementItem}>
+                • {rule.label}
+              </Text>
+            ))}
           </View>
 
           <TouchableOpacity

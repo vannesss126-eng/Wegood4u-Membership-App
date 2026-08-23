@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { Eye, EyeOff } from 'lucide-react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
@@ -24,13 +25,19 @@ export default function LoginScreen() {
   
   const { signIn, isAuthenticated, isLoading } = useAuth();
 
-  // Auto-redirect if already authenticated
+  // Gated on focus. This screen stays MOUNTED underneath whatever is pushed on
+  // top of it, so without the focus check it hijacked any screen that creates a
+  // session: /email-confirmed calls verifyOtp, isAuthenticated flips, this effect
+  // fired from the background and router.replace('/(tabs)') tore the screen down
+  // mid-flow. Only redirect when login is the screen actually being looked at.
+  const isFocused = useIsFocused();
+
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
+    if (isFocused && !isLoading && isAuthenticated) {
       console.log('LoginScreen: Already authenticated, redirecting to tabs');
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isFocused, isAuthenticated, isLoading]);
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);

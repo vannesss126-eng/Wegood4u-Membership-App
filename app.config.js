@@ -34,6 +34,7 @@ module.exports = {
       supportsTablet: true,
       bundleIdentifier: "com.saysheji.wegood4u",
       buildNumber: String(buildNumber),
+      associatedDomains: ["applinks:wegood4u.com"],
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         NSLocationWhenInUseUsageDescription:
@@ -50,6 +51,22 @@ module.exports = {
     android: {
       versionCode: buildNumber,
       package: "com.saysheji.wegood4u",
+      // App Links. Scoped to /email-confirmed ONLY — never the whole host, or
+      // the app would swallow /r/<code> and the marketing pages.
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          data: [
+            {
+              scheme: "https",
+              host: "wegood4u.com",
+              path: "/email-confirmed"
+            }
+          ],
+          category: ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       config: {
         googleMaps: {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""

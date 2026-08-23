@@ -21,24 +21,20 @@ function DeepLinkHandler() {
         // Parse the URL
         const parsedUrl = Linking.parse(url);
         
-        // Check if it's a password reset link
-        if (parsedUrl.path === 'reset-password') {
-          const { type, token } = parsedUrl.queryParams || {};
-          
-          if (type === 'recovery' && token) {
-            console.log('Password reset deep link detected');
-            
-            // Only navigate if user is not authenticated (avoids confusing logged-in users)
-            if (!isAuthenticated) {
-              router.push(`/reset-confirm?token=${token}&type=${type}`);
-            } else {
-              console.warn('Deep link ignored: User already authenticated');
-              // Optional: Redirect to home or show a toast: router.push('/(tabs)');
-            }
-          }
-        }
+        // NOTE: there is deliberately no 'reset-password' branch here, and no
+        // in-app reset screen either. Password recovery is completed on the
+        // WEBSITE: the user sets the new password at
+        // https://wegood4u.com/reset-password and the success page hands off to
+        // the app afterwards. An in-app form could not work — login.tsx sits
+        // mounted underneath and redirects to /(tabs) the moment verifyOtp
+        // creates a session, tearing the form down before it can be filled in.
+        //
+        // /email-confirmed IS handled in-app, but not here: it arrives as a
+        // verified App Link that expo-router routes by filename on its own, and a
+        // manual branch would only race it.
+
         // Check if it's an email confirmation link
-        else if (parsedUrl.path === 'confirm-email') {
+        if (parsedUrl.path === 'confirm-email') {
           const { access_token, refresh_token, type } = parsedUrl.queryParams || {};
           
           if (type === 'signup' && access_token) {
@@ -131,12 +127,16 @@ export default function RootLayout() {
             name="forgot-password" 
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="reset-confirm" 
+          {/* Receives the signup Universal Link / App Link
+              (https://wegood4u.com/email-confirmed?token_hash=...). Distinct from
+              "confirm-email/index" below, which is the in-app "check your inbox"
+              waiting screen. */}
+          <Stack.Screen
+            name="email-confirmed"
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="confirm-email/index" 
+          <Stack.Screen
+            name="confirm-email/index"
             options={{ headerShown: false }}
           />
           <Stack.Screen 

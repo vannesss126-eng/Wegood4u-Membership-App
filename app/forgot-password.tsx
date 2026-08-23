@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,31 +16,71 @@ import { ArrowLeft, Mail, Lock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 
+// Supabase stores a single recovery token per user, so every send REPLACES the
+// previous link. Users who tapped "Resend Email" a few times and then opened the
+// oldest email in their inbox got "invalid or expired link" and concluded the
+// feature was broken. The cooldown makes repeat sends deliberate, and the copy
+// below tells people to use the newest email.
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const isValidEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  useEffect(() => {
+    if (cooldown <= 0) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      return;
+    }
+
+    if (intervalRef.current) return;
+
+    intervalRef.current = setInterval(() => {
+      setCooldown((seconds) => (seconds <= 1 ? 0 : seconds - 1));
+    }, 1000);
+  }, [cooldown]);
+
+  // Belt-and-braces: never leave a timer running past unmount.
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  const isValidEmail = (value: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   };
 
   const handleResetPassword = async () => {
-    if (!email.trim()) {
+    // Trim once and use the trimmed value everywhere. Previously the emptiness
+    // check trimmed but the regex and the request did not, so a trailing space
+    // pasted from a keyboard suggestion failed validation confusingly.
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
       Alert.alert('Error', 'Please enter your email address');
       return;
     }
 
-    if (!isValidEmail(email)) {
+    if (!isValidEmail(trimmedEmail)) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://wegood4u-web.web.app/reset-password',
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        // wegood4u.com (Vercel) is the live site now — the old Firebase
+        // wegood4u-web.web.app URL is not in Supabase's redirect allowlist, so it
+        // fell back to the Site URL (the homepage). This URL IS allowlisted.
+        redirectTo: 'https://wegood4u.com/reset-password',
       });
 
       if (error) {
@@ -48,9 +88,15 @@ export default function ForgotPasswordScreen() {
       }
 
       setEmailSent(true);
+      setCooldown(RESEND_COOLDOWN_SECONDS);
+      // Deliberately conditional wording. Supabase returns success even when NO
+      // account matches — it refuses to reveal which addresses are registered, or
+      // this screen becomes an account-enumeration oracle. The old copy asserted
+      // "we sent it", so a typo'd address looked identical to a real one and sent
+      // people hunting for a mail that was never generated.
       Alert.alert(
-        'Reset Email Sent',
-        'We have sent a password reset link to your email. Please check your inbox and tap the link to reset your password.',
+        'Check Your Email',
+        'If an account exists for that address, we have sent it a password reset link. Please check your inbox, and double-check the spelling if nothing arrives.',
         [
           { text: 'OK' }
         ]
@@ -67,8 +113,11 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleResendEmail = async () => {
+    if (cooldown > 0) return;
     await handleResetPassword();
   };
+
+  const isResendDisabled = isLoading || cooldown > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -140,22 +189,34 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Check Your Email</Text>
               <Text style={styles.description}>
-                We&apos;ve sent a password reset link to {email}. Please check your inbox and tap the link to reset your password.
+                If an account exists for{' '}
+                <Text style={styles.emailEmphasis}>{email.trim()}</Text>, we&apos;ve sent it a
+                password reset link. Please check your inbox and tap the link to reset your
+                password.
               </Text>
               <Text style={[styles.description, styles.descriptionSpam]}>
                 If you don&apos;t receive the email within a few minutes, please check your spam folder or contact our support team.
               </Text>
+              <Text style={styles.descriptionNewest}>
+                If you request another email, only the newest link will work.
+              </Text>
+              <Text style={styles.descriptionTypo}>
+                Nothing arrived? Check the address above for typos — a mistyped address
+                looks exactly the same on this screen as a real one.
+              </Text>
 
               <View style={styles.successActions}>
                 <TouchableOpacity
-                  style={styles.resendButton}
+                  style={[styles.resendButton, isResendDisabled && styles.resendButtonDisabled]}
                   onPress={handleResendEmail}
-                  disabled={isLoading}
+                  disabled={isResendDisabled}
                 >
                   {isLoading ? (
                     <ActivityIndicator size={16} color="#206E56" />
                   ) : (
-                    <Text style={styles.resendButtonText}>Resend Email</Text>
+                    <Text style={styles.resendButtonText}>
+                      {cooldown > 0 ? `Resend Email (${cooldown}s)` : 'Resend Email'}
+                    </Text>
                   )}
                 </TouchableOpacity>
 
@@ -238,9 +299,33 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     paddingHorizontal: 20,
   },
+  emailEmphasis: {
+    fontWeight: '700',
+    color: '#1e293b',
+  },
   descriptionSpam: {
-    marginBottom: 32,
+    marginBottom: 12,
     fontWeight: '600',
+  },
+  descriptionTypo: {
+    fontSize: 14,
+    color: '#92400E',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    padding: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    marginHorizontal: 4,
+  },
+  descriptionNewest: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 20,
+    paddingHorizontal: 20,
+    fontStyle: 'italic',
   },
   form: {
     backgroundColor: 'white',
@@ -308,6 +393,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
+  },
+  resendButtonDisabled: {
+    opacity: 0.6,
   },
   resendButtonText: {
     color: '#206E56',

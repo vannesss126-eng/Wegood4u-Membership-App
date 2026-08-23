@@ -1,0 +1,99 @@
+<!--
+  Supabase Auth -> Emails -> "Reset Password" template.
+  Paste the markup below (everything from <div ...> onward) into the dashboard.
+
+  The link MUST stay on wegood4u.com. Do not switch back to {{ .ConfirmationURL }}:
+  that points at <project-ref>.supabase.co, and a credential email whose sender
+  domain does not match its link domain is one of Gmail's strongest phishing
+  signals — it was drawing a red "This message might be dangerous" banner over
+  our reset emails. {{ .TokenHash }} keeps the link on our own domain and is
+  redeemed by /reset-password via supabase.auth.verifyOtp().
+
+  Side benefit: mail scanners that prefetch links can no longer burn the one-time
+  token, because verification is a POST we make ourselves rather than a GET on the
+  link itself.
+-->
+<div style="margin:0;padding:0;background-color:#f4f5f7;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+    Reset your Wegood4u password. This link expires in 1 hour.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f4f5f7;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:#ffffff;border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+          <tr>
+            <td style="background-color:#206E56;padding:24px;text-align:center;">
+              <span style="color:#ffffff;font-size:22px;font-weight:700;letter-spacing:0.2px;">Wegood4u</span>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px 28px 8px 28px;">
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:1.3;color:#1e293b;font-weight:700;">
+                Reset your password
+              </h1>
+              <p style="margin:0 0 16px 0;font-size:15px;line-height:1.6;color:#475569;">
+                We received a request to reset the password for the Wegood4u account
+                registered to <strong style="color:#1e293b;">{{ .Email }}</strong>.
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:1.6;color:#475569;">
+                Tap the button below to choose a new password. This link expires in
+                1 hour and can only be used once.
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 28px 28px 28px;" align="center">
+              <a href="https://wegood4u.com/reset-password?token_hash={{ .TokenHash }}&type=recovery"
+                 style="display:inline-block;background-color:#206E56;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;padding:14px 32px;border-radius:999px;">
+                Reset my password
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 28px 24px 28px;">
+              <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#64748b;">
+                If the button doesn't work, copy and paste this address into your browser:
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.5;word-break:break-all;">
+                <a href="https://wegood4u.com/reset-password?token_hash={{ .TokenHash }}&type=recovery"
+                   style="color:#206E56;">https://wegood4u.com/reset-password?token_hash={{ .TokenHash }}&type=recovery</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 28px 32px 28px;">
+              <div style="background-color:#f8fafc;border-radius:12px;padding:16px;">
+                <p style="margin:0 0 8px 0;font-size:13px;line-height:1.6;color:#475569;">
+                  <strong style="color:#1e293b;">Didn't request this?</strong>
+                  You can safely ignore this email — your password will not change
+                  unless you use the link above.
+                </p>
+                <p style="margin:0;font-size:13px;line-height:1.6;color:#475569;">
+                  If you asked for more than one reset email, only the most recent
+                  link will work.
+                </p>
+              </div>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background-color:#f8fafc;padding:20px 28px;text-align:center;">
+              <p style="margin:0 0 4px 0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                Sent by Wegood4u · Say Sheji Group Sdn Bhd
+              </p>
+              <p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;">
+                <a href="https://wegood4u.com" style="color:#94a3b8;">wegood4u.com</a>
+                · Need help? <a href="mailto:enquiry@wegood4u.com" style="color:#94a3b8;">enquiry@wegood4u.com</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>
