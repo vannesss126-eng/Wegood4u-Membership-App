@@ -110,6 +110,7 @@ export default function QuestionnairePage() {
     lineId: '',
     wechatId: '',
     countryOfResidence: 'Malaysia',
+    city: '',
     travelDestination: 'Beach Destinations',
     specificBeachDestination: '',
     specificCulturalDestination: '',
@@ -300,6 +301,7 @@ export default function QuestionnairePage() {
             id: userData.id,
             full_name: formData.fullName,
             country_of_residence: formData.countryOfResidence,
+            city: formData.city.trim() || null,
             preferred_communication_channel: formData.communicationChannel as any,
             communication_contact_details: communicationContactDetails,
             travel_destination_category: formData.travelDestination,
@@ -557,6 +559,17 @@ export default function QuestionnairePage() {
               <Text style={styles.dropdownText}>{formData.countryOfResidence}</Text>
               <ChevronDown size={20} color="#6B7280" />
             </TouchableOpacity>
+          </View>
+
+          {/* City — powers the Vendors "Top customer areas" analytics. Optional. */}
+          <View style={styles.section}>
+            <Text style={styles.label}>City</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="e.g. Petaling Jaya"
+              value={formData.city}
+              onChangeText={(text) => updateFormData('city', text)}
+            />
           </View>
 
           {/* Travel Destination */}
