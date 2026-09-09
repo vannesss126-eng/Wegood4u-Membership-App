@@ -8,6 +8,7 @@ export interface FormData {
   lineId: string;
   wechatId: string;
   countryOfResidence: string;
+  city: string;
   travelDestination: string;
   specificBeachDestination: string;
   specificCulturalDestination: string;
