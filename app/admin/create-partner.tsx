@@ -60,12 +60,15 @@ export default function CreatePartnerScreen() {
   // Event
   const [code, setCode] = useState('');
 
-  // Vendors
+  // Vendors — one account can own MANY branches, so stores are multi-select.
   const [stores, setStores] = useState<StoreOpt[]>([]);
-  const [storeId, setStoreId] = useState<string | null>(null);
+  const [storeIds, setStoreIds] = useState<string[]>([]);
   const [storeQuery, setStoreQuery] = useState('');
   const [fee, setFee] = useState('3.00');
   const [loadingStores, setLoadingStores] = useState(false);
+
+  const toggleStore = (id: string) =>
+    setStoreIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -107,8 +110,8 @@ export default function CreatePartnerScreen() {
       Alert.alert('Missing info', 'Enter the event referral code.');
       return;
     }
-    if (kind === 'vendors' && !storeId) {
-      Alert.alert('Missing info', 'Pick the partner store for this vendor.');
+    if (kind === 'vendors' && storeIds.length === 0) {
+      Alert.alert('Missing info', 'Pick at least one store for this vendor.');
       return;
     }
 
@@ -134,29 +137,34 @@ export default function CreatePartnerScreen() {
       const newUserId = res?.user_id as string | undefined;
       if (!newUserId) throw new Error('No user id returned from the server.');
 
-      // 2) Vendors: link the store (admin RLS — not part of the function inputs).
+      // 2) Vendors: link EACH selected branch (admin RLS). One account, many stores.
       if (kind === 'vendors') {
-        const { error: settingsErr } = await supabase
-          .from('partner_store_settings')
-          .upsert(
-            { partner_store_id: storeId, per_visit_fee: Number(fee) || 0, active: true },
-            { onConflict: 'partner_store_id' }
-          );
-        if (settingsErr) throw new Error(`Store settings failed: ${settingsErr.message}`);
+        for (const sid of storeIds) {
+          const { error: settingsErr } = await supabase
+            .from('partner_store_settings')
+            .upsert(
+              { partner_store_id: sid, per_visit_fee: Number(fee) || 0, active: true },
+              { onConflict: 'partner_store_id' }
+            );
+          if (settingsErr) throw new Error(`Store settings failed (${sid}): ${settingsErr.message}`);
 
-        const { error: paErr } = await supabase
-          .from('partner_accounts')
-          .upsert(
-            { user_id: newUserId, partner_store_id: storeId, role: 'owner' },
-            { onConflict: 'user_id,partner_store_id' }
-          );
-        if (paErr) throw new Error(`Partner link failed: ${paErr.message}`);
+          const { error: paErr } = await supabase
+            .from('partner_accounts')
+            .upsert(
+              { user_id: newUserId, partner_store_id: sid, role: 'owner' },
+              { onConflict: 'user_id,partner_store_id' }
+            );
+          if (paErr) throw new Error(`Partner link failed (${sid}): ${paErr.message}`);
+        }
       }
 
       Alert.alert(
         'Partner account created',
         `${email.trim()} is now a ${kind === 'event' ? 'event' : 'vendor'} partner (login confirmed).` +
-          (kind === 'event' ? `\nReferral code: ${code.trim()}` : ''),
+          (kind === 'event' ? `\nReferral code: ${code.trim()}` : '') +
+          (kind === 'vendors'
+            ? `\nLinked to ${storeIds.length} branch${storeIds.length === 1 ? '' : 'es'}.`
+            : ''),
         [{ text: 'Done', onPress: () => router.back() }]
       );
     } catch (e: any) {
@@ -302,7 +310,9 @@ export default function CreatePartnerScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.label}>Partner store</Text>
+              <Text style={styles.label}>
+                Partner branches{storeIds.length > 0 ? ` · ${storeIds.length} selected` : ''}
+              </Text>
               <TextInput
                 style={styles.input}
                 value={storeQuery}
@@ -315,12 +325,12 @@ export default function CreatePartnerScreen() {
                   <ActivityIndicator color="#16513F" style={{ padding: 16 }} />
                 ) : (
                   filteredStores.slice(0, 30).map((s) => {
-                    const selected = storeId === s.id;
+                    const selected = storeIds.includes(s.id);
                     return (
                       <TouchableOpacity
                         key={s.id}
                         style={[styles.storeRow, selected && styles.storeRowSelected]}
-                        onPress={() => setStoreId(s.id)}
+                        onPress={() => toggleStore(s.id)}
                       >
                         <View style={{ flex: 1 }}>
                           <Text style={styles.storeName}>{s.name}</Text>
@@ -332,6 +342,9 @@ export default function CreatePartnerScreen() {
                   })
                 )}
               </View>
+              <Text style={styles.hint}>
+                Tap to select one or more branches — this one account can access them all.
+              </Text>
 
               <Text style={styles.label}>Per-visit fee (RM)</Text>
               <TextInput
@@ -341,6 +354,7 @@ export default function CreatePartnerScreen() {
                 placeholder="3.00"
                 keyboardType="decimal-pad"
               />
+              <Text style={styles.hint}>Applied to every selected branch.</Text>
             </>
           )}
 
