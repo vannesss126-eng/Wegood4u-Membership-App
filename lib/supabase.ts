@@ -220,6 +220,7 @@ export type Database = {
           full_name: string | null;
           dob: string | null;
           country_of_residence: string | null;
+          city: string | null;
           gender: string | null;
           preferred_communication_channel: 'WhatsApp' | 'Telegram' | 'Line' | 'WeChat' | null;
           communication_contact_details: string | null;
@@ -243,6 +244,7 @@ export type Database = {
           full_name?: string | null;
           dob?: string | null;
           country_of_residence?: string | null;
+          city?: string | null;
           gender?: string | null;
           preferred_communication_channel?: 'WhatsApp' | 'Telegram' | 'Line' | 'WeChat' | null;
           communication_contact_details?: string | null;
@@ -266,6 +268,7 @@ export type Database = {
           full_name?: string | null;
           dob?: string | null;
           country_of_residence?: string | null;
+          city?: string | null;
           gender?: string | null;
           preferred_communication_channel?: 'WhatsApp' | 'Telegram' | 'Line' | 'WeChat' | null;
           communication_contact_details?: string | null;
